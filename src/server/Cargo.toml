@@ -1,0 +1,17 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+chrono = "0.4.31"
+datafusion.workspace = true
+futures.workspace = true
+pgwire = "0.16.1"
+query = { path = "../query" }
+rand = "0.8.5"
+tokio-util.workspace = true
+tokio.workspace = true

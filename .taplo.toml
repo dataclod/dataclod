@@ -1,0 +1,15 @@
+[schema]
+path = "https://json.schemastore.org/cargo.json"
+
+[formatting]
+allowed_blank_lines = 1
+
+[[rule]]
+include = ["**/Cargo.toml"]
+keys = [
+  "dependencies",
+  "dev-dependencies",
+  "build-dependencies",
+  "workspace.dependencies",
+]
+formatting = { reorder_keys = true }

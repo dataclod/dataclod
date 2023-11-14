@@ -1,0 +1,17 @@
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["xhwhis <hi@whis.me>"]
+description = "[WIP] DataClot"
+license = "Unlicense"
+
+[workspace]
+members = ["src/query", "src/server"]
+resolver = "2"
+
+[workspace.dependencies]
+async-trait = "0.1.74"
+datafusion = { version = "32.0", features = ["simd"] }
+futures = "0.3.29"
+tokio = { version = "1.34", features = ["full"] }
+tokio-util = { version = "0.7.10", features = ["codec", "io"] }
