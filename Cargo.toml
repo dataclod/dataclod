@@ -1,24 +1,26 @@
 [workspace.package]
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 authors = ["xhwhis <hi@whis.me>"]
 description = "[WIP] DataClot"
 homepage = "https://github/dataclot"
 repository = "https://github.com/dataclot/dataclot"
 license = "Unlicense"
-publish = ["dataclot"]
 
 [workspace]
-members = ["src/bin", "src/query", "src/server"]
+members = ["src/bin", "src/datafusion-util", "src/query", "src/server"]
 resolver = "2"
 
 [workspace.dependencies]
 # workspace dependencies
-query = { path = "src/query", version = "*" }
-server = { path = "src/server", version = "*" }
+datafusion-util = { path = "src/datafusion-util", version = "0.0.1" }
+query = { package = "dataclot-query", path = "src/query", version = "0.0.1" }
+server = { package = "dataclot-server", path = "src/server", version = "0.0.1" }
 
 # crates.io dependencies
-async-trait = "0.1.74"
-datafusion = { version = "32.0", features = ["simd"] }
+async-trait = "0.1"
+datafusion = { version = "33.0", features = ["simd"] }
 futures = "0.3.29"
 tokio = { version = "1.34", features = ["full"] }
+dashmap = "5.5"
+anyhow = "1.0"

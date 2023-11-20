@@ -25,6 +25,7 @@ impl SimpleQueryHandler for PostgresBackend {
     where
         C: ClientInfo + Unpin + Send + Sync,
     {
+        println!("simple query: {}", query);
         let ctx = self.session_context.as_ref();
 
         let df = ctx
@@ -57,6 +58,7 @@ impl ExtendedQueryHandler for PostgresBackend {
     where
         C: ClientInfo + Unpin + Send + Sync,
     {
+        println!("extend query: {}", portal.statement().statement());
         let ctx = self.session_context.as_ref();
 
         let stmt = portal.statement().statement();

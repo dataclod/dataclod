@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+use datafusion::execution::context::SessionConfig;
 use datafusion::prelude::SessionContext;
+use datafusion_util::information_schema::with_pg_catalog;
 use pgwire::api::auth::{AuthSource, ServerParameterProvider};
 use pgwire::api::store::MemPortalStore;
 use pgwire::api::MakeHandler;
@@ -17,9 +19,12 @@ pub struct MakePostgresBackend {
 
 impl MakePostgresBackend {
     pub fn new() -> Self {
-        let core = SessionContext::new();
+        let cfg = SessionConfig::new().with_information_schema(true);
+        let ctx = SessionContext::new_with_config(cfg);
+        with_pg_catalog(&ctx).unwrap();
+
         Self {
-            session_context: Arc::new(core),
+            session_context: Arc::new(ctx),
             query_parser: Arc::new(DataClotQueryParser {}),
         }
     }
