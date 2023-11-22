@@ -11,5 +11,7 @@ keys = [
   "dev-dependencies",
   "build-dependencies",
   "workspace.dependencies",
+  "workspace.lints.rust",
+  "workspace.lints.clippy",
 ]
 formatting = { reorder_keys = true }

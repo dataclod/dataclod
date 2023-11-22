@@ -890,6 +890,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "datafusion",
+ "futures",
+ "num-traits",
  "postgres-types",
 ]
 
