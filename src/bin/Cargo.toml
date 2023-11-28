@@ -1,5 +1,5 @@
 [package]
-name = "dataclot"
+name = "dataclod"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -13,5 +13,5 @@ server.workspace = true
 tokio.workspace = true
 
 [[bin]]
-name = "dataclot-core"
+name = "dataclod-core"
 path = "core/main.rs"

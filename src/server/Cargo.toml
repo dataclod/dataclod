@@ -1,5 +1,5 @@
 [package]
-name = "dataclot-server"
+name = "dataclod-server"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

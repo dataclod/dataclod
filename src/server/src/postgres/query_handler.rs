@@ -10,13 +10,13 @@ use pgwire::api::store::MemPortalStore;
 use pgwire::api::ClientInfo;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 
-use super::query_parser::DataClotQueryParser;
+use super::query_parser::DataClodQueryParser;
 use super::types::{encode_dataframe, encode_schema};
 
 pub struct PostgresBackend {
     pub session_context: Arc<SessionContext>,
     pub portal_store: Arc<MemPortalStore<Statement>>,
-    pub query_parser: Arc<DataClotQueryParser>,
+    pub query_parser: Arc<DataClodQueryParser>,
 }
 
 #[async_trait]
@@ -41,7 +41,7 @@ impl SimpleQueryHandler for PostgresBackend {
 #[async_trait]
 impl ExtendedQueryHandler for PostgresBackend {
     type PortalStore = MemPortalStore<Self::Statement>;
-    type QueryParser = DataClotQueryParser;
+    type QueryParser = DataClodQueryParser;
     type Statement = Statement;
 
     fn portal_store(&self) -> Arc<Self::PortalStore> {

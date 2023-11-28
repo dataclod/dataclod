@@ -5,14 +5,14 @@ use pgwire::api::auth::ServerParameterProvider;
 use pgwire::api::{ClientInfo, MakeHandler};
 use tokio::net::TcpListener;
 
-use super::auth_source::DataClotAuthSource;
-use super::make_handler::{MakeDataClotStartupHandler, MakePostgresBackend};
+use super::auth_source::DataClodAuthSource;
+use super::make_handler::{MakeDataClodStartupHandler, MakePostgresBackend};
 
-pub struct DataClotParameterProvider {
+pub struct DataClodParameterProvider {
     version: &'static str,
 }
 
-impl DataClotParameterProvider {
+impl DataClodParameterProvider {
     fn new() -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION"),
@@ -20,7 +20,7 @@ impl DataClotParameterProvider {
     }
 }
 
-impl ServerParameterProvider for DataClotParameterProvider {
+impl ServerParameterProvider for DataClodParameterProvider {
     fn server_parameters<C>(&self, _client: &C) -> Option<HashMap<String, String>>
     where
         C: ClientInfo,
@@ -38,9 +38,9 @@ impl ServerParameterProvider for DataClotParameterProvider {
 pub async fn server(tcp_addr: String) {
     let listener = TcpListener::bind(&tcp_addr).await.unwrap();
 
-    let authenticator = Arc::new(MakeDataClotStartupHandler::new(
-        Arc::new(DataClotAuthSource),
-        Arc::new(DataClotParameterProvider::new()),
+    let authenticator = Arc::new(MakeDataClodStartupHandler::new(
+        Arc::new(DataClodAuthSource),
+        Arc::new(DataClodParameterProvider::new()),
     ));
     let processor = Arc::new(MakePostgresBackend::new());
 

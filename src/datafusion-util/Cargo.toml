@@ -12,6 +12,6 @@ license.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 datafusion.workspace = true
-postgres-types = "0.2.6"
 futures.workspace = true
 num-traits = "0.2.17"
+postgres-types = "0.2.6"

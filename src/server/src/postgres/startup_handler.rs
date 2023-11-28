@@ -11,14 +11,14 @@ use pgwire::messages::startup::Authentication;
 use pgwire::messages::{PgWireBackendMessage, PgWireFrontendMessage};
 use tokio::sync::Mutex;
 
-pub struct DataClotStartupHandler<A, P> {
+pub struct DataClodStartupHandler<A, P> {
     pub auth_source: Arc<A>,
     pub parameter_provider: Arc<P>,
     pub cached_password: Mutex<Vec<u8>>,
 }
 
 #[async_trait]
-impl<A: AuthSource, P: ServerParameterProvider> StartupHandler for DataClotStartupHandler<A, P> {
+impl<A: AuthSource, P: ServerParameterProvider> StartupHandler for DataClodStartupHandler<A, P> {
     async fn on_startup<C>(
         &self, client: &mut C, message: PgWireFrontendMessage,
     ) -> PgWireResult<()>

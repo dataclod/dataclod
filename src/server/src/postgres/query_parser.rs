@@ -5,10 +5,10 @@ use pgwire::api::Type;
 use pgwire::error::{PgWireError, PgWireResult};
 use query::sql_to_statement;
 
-pub struct DataClotQueryParser;
+pub struct DataClodQueryParser;
 
 #[async_trait]
-impl QueryParser for DataClotQueryParser {
+impl QueryParser for DataClodQueryParser {
     type Statement = Statement;
 
     async fn parse_sql(&self, sql: &str, _types: &[Type]) -> PgWireResult<Self::Statement> {

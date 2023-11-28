@@ -5,8 +5,8 @@ skip_rust_env_info = true
 skip_crate_env_info = true
 
 [env]
-DATACLOT_PORT = 9973
-DATACLOT_PASSWORD = "dataclot"
+DATACLOD_PORT = 9973
+DATACLOD_PASSWORD = "dataclod"
 TOKIO_CONSOLE_BIND = "0.0.0.0:6669"
 IMAGE_TAG = { script = ["git rev-parse --short HEAD"] }
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
@@ -35,14 +35,26 @@ dependencies = ["fmt-check", "check-all", "clippy-all", "test"]
 [tasks.precheck]
 dependencies = ["fmt-check", "check-all"]
 
+[tasks.publish]
+command = "cargo"
+args = [
+  "release",
+  "publish",
+  "--workspace",
+  "--execute",
+  "--no-confirm",
+  "--registry",
+  "crates-io",
+]
+
 [tasks.core]
 command = "cargo"
-args = ["run", "--bin", "dataclot-core"]
+args = ["run", "--bin", "dataclod-core"]
 
 [tasks.core-console]
 env = { RUSTFLAGS = "--cfg tokio_unstable" }
 command = "cargo"
-args = ["run", "--bin", "dataclot-core", "--features", "tokio-console"]
+args = ["run", "--bin", "dataclod-core", "--features", "tokio-console"]
 
 [tasks.fmt]
 command = "cargo"
@@ -119,10 +131,10 @@ install_crate = { crate_name = "flamegraph", binary = "cargo", test_arg = [
 ] }
 env = { CARGO_PROFILE_RELEASE_DEBUG = true }
 command = "cargo"
-args = ["flamegraph", "--bin", "dataclot-core"]
+args = ["flamegraph", "--bin", "dataclod-core"]
 
 [tasks.core-image]
-script = "docker build -t dataclot-core:$IMAGE_TAG -f $CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY/docker/core.Dockerfile $CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY"
+script = "docker build -t dataclod-core:$IMAGE_TAG -f $CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY/docker/core.Dockerfile $CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY"
 
 [tasks.run-core-image]
-script = "docker run -d -e DATACLOT_PORT=$DATACLOT_PORT -e DATACLOT_PASSWORD=$DATACLOT_PASSWORD -e TOKIO_CONSOLE_BIND=$TOKIO_CONSOLE_BIND -p 9973:9973 -p 6669:6669 --name dataclot-core dataclot-core:$IMAGE_TAG"
+script = "docker run -d -e DATACLOD_PORT=$DATACLOD_PORT -e DATACLOD_PASSWORD=$DATACLOD_PASSWORD -e TOKIO_CONSOLE_BIND=$TOKIO_CONSOLE_BIND -p 9973:9973 -p 6669:6669 --name dataclod-core dataclod-core:$IMAGE_TAG"
