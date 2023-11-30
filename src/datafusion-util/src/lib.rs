@@ -1,3 +1,2 @@
-pub mod information_schema;
-mod sqlbuiltin;
-mod udtf;
+pub mod catalog;
+pub mod sqlbuiltin;

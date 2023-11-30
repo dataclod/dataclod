@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use datafusion::execution::context::SessionConfig;
 use datafusion::prelude::SessionContext;
-use datafusion_util::information_schema::with_pg_catalog;
+use datafusion_util::catalog::with_pg_catalog;
+use datafusion_util::sqlbuiltin::register_udtf;
 use pgwire::api::auth::{AuthSource, ServerParameterProvider};
 use pgwire::api::store::MemPortalStore;
 use pgwire::api::MakeHandler;
@@ -22,6 +23,7 @@ impl MakePostgresBackend {
         let cfg = SessionConfig::new().with_information_schema(true);
         let ctx = SessionContext::new_with_config(cfg);
         with_pg_catalog(&ctx).unwrap();
+        register_udtf(&ctx);
 
         Self {
             session_context: Arc::new(ctx),
