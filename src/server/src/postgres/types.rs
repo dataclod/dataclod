@@ -1,14 +1,7 @@
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
 
-use chrono::{DateTime, Duration, NaiveDateTime, NaiveTime, Utc};
-use datafusion::arrow::array::{
-    ArrayRef, BinaryArray, BooleanArray, Date32Array, Date64Array, Float32Array, Float64Array,
-    Int16Array, Int32Array, Int64Array, Int8Array, LargeBinaryArray, LargeStringArray, ListArray,
-    StringArray, Time32MillisecondArray, Time32SecondArray, Time64MicrosecondArray,
-    Time64NanosecondArray, TimestampMicrosecondArray, TimestampMillisecondArray,
-    TimestampNanosecondArray, TimestampSecondArray, UInt32Array,
-};
+use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
+use datafusion::arrow::array::*;
 use datafusion::arrow::datatypes::{DataType, TimeUnit};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::DFSchema;
@@ -18,6 +11,8 @@ use pgwire::api::portal::Format;
 use pgwire::api::results::{DataRowEncoder, FieldInfo, QueryResponse};
 use pgwire::api::Type;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
+
+use super::utils::*;
 
 pub async fn encode_dataframe<'a>(
     df: DataFrame, format: &Format,
@@ -224,7 +219,6 @@ macro_rules! encode_value {
 
     ($fn_name:ident, $arr_ty:ty, $closure:expr) => {
         fn $fn_name(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) -> PgWireResult<()> {
-            #[allow(clippy::redundant_closure_call)]
             encoder.encode_field(&$closure(
                 arr.as_any().downcast_ref::<$arr_ty>().unwrap().value(idx),
             ))
@@ -240,69 +234,39 @@ encode_value!(encode_i64_value, Int64Array);
 encode_value!(encode_u32_value, UInt32Array);
 encode_value!(encode_f32_value, Float32Array);
 encode_value!(encode_f64_value, Float64Array);
-encode_value!(encode_ts_value, TimestampSecondArray, |val: i64| {
-    NaiveDateTime::from_timestamp_opt(val, 0)
-});
+encode_value!(encode_ts_value, TimestampSecondArray, make_ts);
 encode_value!(
     encode_ts_millis_value,
     TimestampMillisecondArray,
-    |val: i64| { NaiveDateTime::from_timestamp_millis(val) }
+    make_ts_millis
 );
 encode_value!(
     encode_ts_micros_value,
     TimestampMicrosecondArray,
-    |val: i64| { NaiveDateTime::from_timestamp_micros(val) }
+    make_ts_micros
 );
 encode_value!(
     encode_ts_nanos_value,
     TimestampNanosecondArray,
-    |val: i64| {
-        let secs = val.div_euclid(1_000_000_000);
-        let nsecs = val.rem_euclid(1_000_000_000) as u32;
-        NaiveDateTime::from_timestamp_opt(secs, nsecs)
-    }
+    make_ts_nanos
 );
-encode_value!(encode_date32_value, Date32Array, |val: i32| {
-    let utc_time: DateTime<Utc> = DateTime::<Utc>::from(UNIX_EPOCH);
-    utc_time.checked_add_signed(Duration::days(val as i64))
-});
-encode_value!(encode_date64_value, Date64Array, |val: i64| {
-    let utc_time: DateTime<Utc> = DateTime::<Utc>::from(UNIX_EPOCH);
-    utc_time.checked_add_signed(Duration::milliseconds(val))
-});
-encode_value!(encode_time32_value, Time32SecondArray, |val: i32| {
-    let secs = val.rem_euclid(86_400) as u32;
-    NaiveTime::from_num_seconds_from_midnight_opt(secs, 0)
-});
+encode_value!(encode_date32_value, Date32Array, make_date32);
+encode_value!(encode_date64_value, Date64Array, make_date64);
+encode_value!(encode_time32_value, Time32SecondArray, make_time32);
 encode_value!(
     encode_time32_millis_value,
     Time32MillisecondArray,
-    |val: i32| {
-        let millis = val.rem_euclid(86_400_000);
-        let secs = millis.div_euclid(1000) as u32;
-        let nano = millis.rem_euclid(1000) as u32 * 1_000_000;
-        NaiveTime::from_num_seconds_from_midnight_opt(secs, nano)
-    }
+    make_time32_millis
 );
 encode_value!(
     encode_time64_micros_value,
     Time64MicrosecondArray,
-    |val: i64| {
-        let micros = val.rem_euclid(86_400_000_000);
-        let secs = micros.div_euclid(1_000_000) as u32;
-        let nano = micros.rem_euclid(1_000_000) as u32 * 1000;
-        NaiveTime::from_num_seconds_from_midnight_opt(secs, nano)
-    }
+    make_time64_micros
 );
 encode_value!(
     encode_time64_nanos_value,
     Time64NanosecondArray,
-    |val: i64| {
-        let nanos = val.rem_euclid(86_400_000_000_000);
-        let secs = nanos.div_euclid(1_000_000_000) as u32;
-        let nano = nanos.rem_euclid(1_000_000_000) as u32;
-        NaiveTime::from_num_seconds_from_midnight_opt(secs, nano)
-    }
+    make_time64_nanos
 );
 encode_value!(encode_binary_value, BinaryArray);
 encode_value!(encode_large_binary_value, LargeBinaryArray);
@@ -356,89 +320,61 @@ encode_list_value!(
     encode_ts_list_value,
     TimestampSecondArray,
     NaiveDateTime,
-    |val: i64| { NaiveDateTime::from_timestamp_opt(val, 0) }
+    make_ts
 );
 encode_list_value!(
     encode_ts_millis_list_value,
     TimestampMillisecondArray,
     NaiveDateTime,
-    |val: i64| { NaiveDateTime::from_timestamp_millis(val) }
+    make_ts_millis
 );
 encode_list_value!(
     encode_ts_micros_list_value,
     TimestampMicrosecondArray,
     NaiveDateTime,
-    |val: i64| { NaiveDateTime::from_timestamp_micros(val) }
+    make_ts_micros
 );
 encode_list_value!(
     encode_ts_nanos_list_value,
     TimestampNanosecondArray,
     NaiveDateTime,
-    |val: i64| {
-        let secs = val.div_euclid(1_000_000_000);
-        let nsecs = val.rem_euclid(1_000_000_000) as u32;
-        NaiveDateTime::from_timestamp_opt(secs, nsecs)
-    }
+    make_ts_nanos
 );
 encode_list_value!(
     encode_date32_list_value,
     Date32Array,
     DateTime<Utc>,
-    |val: i32| {
-        let utc_time: DateTime<Utc> = DateTime::<Utc>::from(UNIX_EPOCH);
-        utc_time.checked_add_signed(Duration::days(val as i64))
-    }
+    make_date32
 );
 encode_list_value!(
     encode_date64_list_value,
     Date64Array,
     DateTime<Utc>,
-    |val: i64| {
-        let utc_time: DateTime<Utc> = DateTime::<Utc>::from(UNIX_EPOCH);
-        utc_time.checked_add_signed(Duration::milliseconds(val))
-    }
+    make_date64
 );
 encode_list_value!(
     encode_time32_list_value,
     Time32SecondArray,
     NaiveTime,
-    |val: i32| {
-        let secs = val.rem_euclid(86_400) as u32;
-        NaiveTime::from_num_seconds_from_midnight_opt(secs, 0)
-    }
+    make_time32
 );
 encode_list_value!(
     encode_time32_millis_list_value,
     Time32MillisecondArray,
     NaiveTime,
-    |val: i32| {
-        let millis = val.rem_euclid(86_400_000);
-        let secs = millis.div_euclid(1000) as u32;
-        let nano = millis.rem_euclid(1000) as u32 * 1_000_000;
-        NaiveTime::from_num_seconds_from_midnight_opt(secs, nano)
-    }
+    make_time32_millis
 );
 encode_list_value!(
     encode_time64_micros_list_value,
     Time64MicrosecondArray,
     NaiveTime,
-    |val: i64| {
-        let micros = val.rem_euclid(86_400_000_000);
-        let secs = micros.div_euclid(1_000_000) as u32;
-        let nano = micros.rem_euclid(1_000_000) as u32 * 1000;
-        NaiveTime::from_num_seconds_from_midnight_opt(secs, nano)
-    }
+    make_time64_micros
 );
 encode_list_value!(
     encode_time64_nanos_list_value,
     Time64NanosecondArray,
     NaiveTime,
-    |val: i64| {
-        let nanos = val.rem_euclid(86_400_000_000_000);
-        let secs = nanos.div_euclid(1_000_000_000) as u32;
-        let nano = nanos.rem_euclid(1_000_000_000) as u32;
-        NaiveTime::from_num_seconds_from_midnight_opt(secs, nano)
-    }
+    make_time64_nanos
 );
 encode_list_value!(encode_binary_list_value, BinaryArray, &[u8]);
 encode_list_value!(encode_large_binary_list_value, LargeBinaryArray, &[u8]);

@@ -1706,6 +1706,7 @@ dependencies = [
 [[package]]
 name = "pgwire"
 version = "0.16.1"
+source = "git+https://github.com/sunng87/pgwire.git?rev=8d91b27af9d6b0679a1b91c0f82c27f69ebf95ee#8d91b27af9d6b0679a1b91c0f82c27f69ebf95ee"
 dependencies = [
  "async-trait",
  "base64",
