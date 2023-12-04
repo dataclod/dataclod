@@ -83,6 +83,7 @@ impl ExtendedQueryHandler for PostgresBackend {
         match target {
             StatementOrPortal::Statement(statement) => {
                 let stmt = statement.statement();
+                println!("describe statement: {}", stmt);
 
                 let plan = ctx
                     .state()
@@ -103,6 +104,7 @@ impl ExtendedQueryHandler for PostgresBackend {
             }
             StatementOrPortal::Portal(portal) => {
                 let stmt = portal.statement().statement();
+                println!("describe portal: {}", stmt);
 
                 let plan = ctx
                     .state()

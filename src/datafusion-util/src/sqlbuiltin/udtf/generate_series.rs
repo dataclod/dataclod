@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use datafusion::arrow::array::Int64Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::common::{plan_err, DataFusionError, ScalarValue};
+use datafusion::common::{exec_err, DataFusionError, ScalarValue};
 use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
@@ -31,7 +31,7 @@ impl TableProvider for GenerateSeriesTable<i64> {
         Arc::new(Schema::new(vec![Field::new(
             "generate_series",
             DataType::Int64,
-            false,
+            true,
         )]))
     }
 
@@ -55,6 +55,7 @@ impl TableProvider for GenerateSeriesTable<i64> {
         )?))
     }
 }
+
 pub struct GenerateSeriesUDTF {}
 
 impl TableFunctionImpl for GenerateSeriesUDTF {
@@ -66,8 +67,12 @@ impl TableFunctionImpl for GenerateSeriesUDTF {
         let info = SimplifyContext::new(&execution_props);
         let stop = ExprSimplifier::new(info).simplify(exprs[1].clone())?;
         let execution_props = ExecutionProps::new();
-        let info = SimplifyContext::new(&execution_props);
-        let step = ExprSimplifier::new(info).simplify(exprs[2].clone())?;
+        let step = if exprs.len() == 3 {
+            let info = SimplifyContext::new(&execution_props);
+            ExprSimplifier::new(info).simplify(exprs[2].clone())?
+        } else {
+            Expr::Literal(ScalarValue::Int64(Some(1)))
+        };
 
         match (start, stop, step) {
             (
@@ -75,7 +80,7 @@ impl TableFunctionImpl for GenerateSeriesUDTF {
                 Expr::Literal(ScalarValue::Int64(Some(stop))),
                 Expr::Literal(ScalarValue::Int64(Some(step))),
             ) => Ok(Arc::new(GenerateSeriesTable { start, stop, step })),
-            _ => plan_err!("Limit must be an integer"),
+            _ => exec_err!("Limit must be an integer"),
         }
     }
 }
@@ -92,7 +97,7 @@ mod tests {
 
         ctx.register_udtf("generate_series", Arc::new(GenerateSeriesUDTF {}));
 
-        let df = ctx.sql("SELECT * FROM generate_series(1, 10, 1);").await?;
+        let df = ctx.sql("SELECT * FROM generate_series(1, 1);").await?;
         df.show().await?;
 
         Ok(())
