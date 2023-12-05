@@ -892,7 +892,6 @@ dependencies = [
  "datafusion",
  "futures",
  "num-traits",
- "postgres-types",
  "tokio",
 ]
 

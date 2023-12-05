@@ -1,5 +1,6 @@
 mod pg_namespace;
 mod pg_type;
+mod utils;
 
 use std::sync::Arc;
 

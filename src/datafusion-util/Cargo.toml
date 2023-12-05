@@ -14,5 +14,4 @@ async-trait.workspace = true
 datafusion.workspace = true
 futures.workspace = true
 num-traits = "0.2.17"
-postgres-types = "0.2.6"
 tokio.workspace = true

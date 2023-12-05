@@ -11,31 +11,38 @@ use datafusion::execution::context::SessionState;
 use datafusion::logical_expr::{Expr, TableType};
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
-use postgres_types::Type as PgType;
+
+use super::utils::PgType;
 
 struct PgTypeBuilder {
     oid: UInt32Builder,
     typname: StringBuilder,
+    typnamespace: UInt32Builder,
 }
 
 impl PgTypeBuilder {
     fn new() -> Self {
-        let capacity = 10;
+        let capacity = 100;
 
         Self {
             oid: UInt32Builder::with_capacity(capacity),
             typname: StringBuilder::with_capacity(capacity, capacity),
+            typnamespace: UInt32Builder::with_capacity(capacity),
         }
     }
 
     fn add_row(&mut self, typ: &PgType) {
-        self.oid.append_value(typ.oid());
-        self.typname.append_value(typ.name());
+        self.oid.append_value(typ.oid);
+        self.typname.append_value(typ.typname);
+        self.typnamespace.append_value(typ.typnamespace);
     }
 
     fn finish(mut self) -> Vec<ArrayRef> {
-        let columns: Vec<ArrayRef> =
-            vec![Arc::new(self.oid.finish()), Arc::new(self.typname.finish())];
+        let columns: Vec<ArrayRef> = vec![
+            Arc::new(self.oid.finish()),
+            Arc::new(self.typname.finish()),
+            Arc::new(self.typnamespace.finish()),
+        ];
 
         columns
     }
@@ -49,23 +56,8 @@ impl PgTypeTable {
     pub fn new() -> Self {
         let mut builder = PgTypeBuilder::new();
 
-        let supported_types = vec![
-            PgType::UNKNOWN,
-            PgType::BOOL,
-            PgType::CHAR,
-            PgType::INT2,
-            PgType::INT4,
-            PgType::INT8,
-            PgType::TIMESTAMP,
-            PgType::TIME,
-            PgType::DATE,
-            PgType::BYTEA,
-            PgType::FLOAT4,
-            PgType::FLOAT8,
-            PgType::VARCHAR,
-        ];
-        for typ in supported_types {
-            builder.add_row(&typ)
+        for typ in PgType::get_all() {
+            builder.add_row(typ);
         }
 
         Self {
@@ -94,6 +86,7 @@ impl TableProvider for PgTypeTable {
         Arc::new(Schema::new(vec![
             Field::new("oid", DataType::UInt32, false),
             Field::new("typname", DataType::Utf8, false),
+            Field::new("typnamespace", DataType::UInt32, false),
         ]))
     }
 
