@@ -13,5 +13,4 @@ anyhow.workspace = true
 async-trait.workspace = true
 datafusion.workspace = true
 futures.workspace = true
-num-traits = "0.2.17"
 tokio.workspace = true
