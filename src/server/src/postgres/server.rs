@@ -8,17 +8,9 @@ use tokio::net::TcpListener;
 use super::auth_source::DataClodAuthSource;
 use super::make_handler::{MakeDataClodStartupHandler, MakePostgresBackend};
 
-pub struct DataClodParameterProvider {
-    version: &'static str,
-}
+const PG_VERSION: &str = "9.0";
 
-impl DataClodParameterProvider {
-    fn new() -> Self {
-        Self {
-            version: env!("CARGO_PKG_VERSION"),
-        }
-    }
-}
+pub struct DataClodParameterProvider {}
 
 impl ServerParameterProvider for DataClodParameterProvider {
     fn server_parameters<C>(&self, _client: &C) -> Option<HashMap<String, String>>
@@ -26,7 +18,7 @@ impl ServerParameterProvider for DataClodParameterProvider {
         C: ClientInfo,
     {
         Some(HashMap::from([
-            ("server_version".to_owned(), self.version.to_owned()),
+            ("server_version".to_owned(), PG_VERSION.to_owned()),
             ("server_encoding".to_owned(), "UTF8".to_owned()),
             ("client_encoding".to_owned(), "UTF8".to_owned()),
             ("DateStyle".to_owned(), "ISO YMD".to_owned()),
@@ -40,7 +32,7 @@ pub async fn server(tcp_addr: String) {
 
     let authenticator = Arc::new(MakeDataClodStartupHandler::new(
         Arc::new(DataClodAuthSource),
-        Arc::new(DataClodParameterProvider::new()),
+        Arc::new(DataClodParameterProvider {}),
     ));
     let processor = Arc::new(MakePostgresBackend::new());
 

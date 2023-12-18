@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use datafusion::prelude::SessionContext;
 use datafusion::sql::parser::Statement;
 use pgwire::api::portal::{Format, Portal};
 use pgwire::api::query::{ExtendedQueryHandler, SimpleQueryHandler, StatementOrPortal};
@@ -9,12 +8,13 @@ use pgwire::api::results::{DescribeResponse, Response};
 use pgwire::api::store::MemPortalStore;
 use pgwire::api::ClientInfo;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
+use query::QueryContext;
 
 use super::query_parser::DataClodQueryParser;
 use super::types::{encode_dataframe, encode_schema};
 
 pub struct PostgresBackend {
-    pub session_context: Arc<SessionContext>,
+    pub session_context: Arc<QueryContext>,
     pub portal_store: Arc<MemPortalStore<Statement>>,
     pub query_parser: Arc<DataClodQueryParser>,
 }
@@ -33,7 +33,7 @@ impl SimpleQueryHandler for PostgresBackend {
         let df = ctx
             .sql(query)
             .await
-            .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+            .map_err(|err| PgWireError::ApiError(err.into()))?;
         let resp = encode_dataframe(df, &Format::UnifiedText).await?;
 
         Ok(vec![Response::Query(resp)])
@@ -67,7 +67,7 @@ impl ExtendedQueryHandler for PostgresBackend {
         let df = ctx
             .sql(&stmt.to_string())
             .await
-            .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+            .map_err(|err| PgWireError::ApiError(err.into()))?;
 
         let resp = encode_dataframe(df, &Format::UnifiedText).await?;
 

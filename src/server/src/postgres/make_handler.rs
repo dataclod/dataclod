@@ -7,6 +7,7 @@ use datafusion_util::sqlbuiltin::{register_udf, register_udtf};
 use pgwire::api::auth::{AuthSource, ServerParameterProvider};
 use pgwire::api::store::MemPortalStore;
 use pgwire::api::MakeHandler;
+use query::QueryContext;
 use tokio::sync::Mutex;
 
 use super::query_handler::PostgresBackend;
@@ -14,7 +15,7 @@ use super::query_parser::DataClodQueryParser;
 use super::startup_handler::DataClodStartupHandler;
 
 pub struct MakePostgresBackend {
-    session_context: Arc<SessionContext>,
+    session_context: Arc<QueryContext>,
     query_parser: Arc<DataClodQueryParser>,
 }
 
@@ -27,7 +28,7 @@ impl MakePostgresBackend {
         register_udf(&ctx);
 
         Self {
-            session_context: Arc::new(ctx),
+            session_context: Arc::new(QueryContext::new(ctx)),
             query_parser: Arc::new(DataClodQueryParser {}),
         }
     }
