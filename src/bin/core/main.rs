@@ -1,3 +1,8 @@
+use tikv_jemallocator::Jemalloc;
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 const DEFAULT_CORE_PORT: &str = "9973";
 
 #[tokio::main]

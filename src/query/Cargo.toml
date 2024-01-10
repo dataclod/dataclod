@@ -10,5 +10,5 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-datafusion.workspace = true
 datafusion-extra.workspace = true
+datafusion.workspace = true

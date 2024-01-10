@@ -1,4 +1,5 @@
 mod context;
+mod expr;
 mod parser;
 
 pub use context::QueryContext;
