@@ -42,13 +42,8 @@ impl SimpleQueryHandler for PostgresBackend {
 
 #[async_trait]
 impl ExtendedQueryHandler for PostgresBackend {
-    type PortalStore = MemPortalStore<Self::Statement>;
     type QueryParser = DataClodQueryParser;
     type Statement = Statement;
-
-    fn portal_store(&self) -> Arc<Self::PortalStore> {
-        self.portal_store.clone()
-    }
 
     fn query_parser(&self) -> Arc<Self::QueryParser> {
         self.query_parser.clone()
@@ -60,10 +55,10 @@ impl ExtendedQueryHandler for PostgresBackend {
     where
         C: ClientInfo + Unpin + Send + Sync,
     {
-        println!("extend query: {}", portal.statement().statement());
+        println!("extend query: {}", portal.statement.statement);
         let ctx = self.session_context.as_ref();
 
-        let stmt = portal.statement().statement();
+        let stmt = &portal.statement.statement;
         let df = ctx
             .sql(&stmt.to_string())
             .await
@@ -84,7 +79,7 @@ impl ExtendedQueryHandler for PostgresBackend {
 
         match target {
             StatementOrPortal::Statement(statement) => {
-                let stmt = statement.statement();
+                let stmt = &statement.statement;
                 println!("describe statement: {}", stmt);
 
                 let plan = ctx
@@ -100,12 +95,12 @@ impl ExtendedQueryHandler for PostgresBackend {
                     })?;
                 let schema = plan.schema();
 
-                let param_types = statement.parameter_types().clone();
+                let param_types = statement.parameter_types.clone();
                 let fields = encode_schema(schema, &Format::UnifiedBinary)?;
                 Ok(DescribeResponse::new(Some(param_types), fields))
             }
             StatementOrPortal::Portal(portal) => {
-                let stmt = portal.statement().statement();
+                let stmt = &portal.statement.statement;
                 println!("describe portal: {}", stmt);
 
                 let plan = ctx
@@ -121,7 +116,7 @@ impl ExtendedQueryHandler for PostgresBackend {
                     })?;
                 let schema = plan.schema();
 
-                let format = portal.result_column_format();
+                let format = &portal.result_column_format;
                 let fields = encode_schema(schema, format)?;
                 Ok(DescribeResponse::new(None, fields))
             }

@@ -12,7 +12,7 @@ impl AuthSource for DataClodAuthSource {
         let salt = rand::thread_rng().gen::<[u8; 4]>().to_vec();
         let password = std::env::var("DATACLOD_PASSWORD").unwrap_or(String::from("dataclod"));
         let hash_password = hash_md5_password(
-            login.user().map(|s| s.as_str()).unwrap_or_default(),
+            login.user().unwrap_or_default(),
             &password,
             &salt,
         );

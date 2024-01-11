@@ -37,14 +37,13 @@ impl<A: AuthSource, P: ServerParameterProvider> StartupHandler for DataClodStart
 
                 let salt = salt_and_pass
                     .salt()
-                    .as_ref()
                     .expect("Salt is required for Md5Password authentication");
 
-                *self.cached_password.lock().await = salt_and_pass.password().clone();
+                *self.cached_password.lock().await = salt_and_pass.password().to_vec();
 
                 client
                     .send(PgWireBackendMessage::Authentication(
-                        Authentication::MD5Password(salt.clone()),
+                        Authentication::MD5Password(salt.to_vec()),
                     ))
                     .await?;
             }
@@ -53,8 +52,7 @@ impl<A: AuthSource, P: ServerParameterProvider> StartupHandler for DataClodStart
                 let cached_pass = self.cached_password.lock().await;
 
                 let login_info = LoginInfo::from_client_info(client);
-                if pwd.password().as_bytes() == *cached_pass
-                    && login_info.user().as_deref() == Some(&"postgres".to_string())
+                if pwd.password.as_bytes() == *cached_pass && login_info.user() == Some("postgres")
                 {
                     pgwire::api::auth::finish_authentication(
                         client,
