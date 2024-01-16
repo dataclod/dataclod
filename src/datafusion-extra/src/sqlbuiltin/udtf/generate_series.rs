@@ -47,7 +47,7 @@ impl TableProvider for GenerateSeriesTable<i64> {
         let array: Int64Array = (self.start..=self.stop)
             .step_by(self.step as usize)
             .collect();
-        let batches = vec![RecordBatch::try_new(schema, vec![Arc::new(array)]).unwrap()];
+        let batches = vec![RecordBatch::try_new(schema, vec![Arc::new(array)])?];
         Ok(Arc::new(MemoryExec::try_new(
             &[batches],
             self.schema(),

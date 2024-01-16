@@ -3,10 +3,9 @@ use std::sync::Arc;
 use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
 use datafusion::arrow::array::*;
 use datafusion::arrow::datatypes::{DataType, TimeUnit};
-use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::DFSchema;
 use datafusion::prelude::DataFrame;
-use futures::{stream, StreamExt};
+use futures::{stream, TryStreamExt};
 use num_traits::NumCast;
 use pgwire::api::portal::Format;
 use pgwire::api::results::{DataRowEncoder, FieldInfo, QueryResponse};
@@ -28,8 +27,8 @@ pub async fn encode_dataframe<'a>(
 
     let fields_ref = fields.clone();
     let pg_row_stream = recordbatch_stream
-        .map(move |rb: datafusion::error::Result<RecordBatch>| {
-            let rb = rb.unwrap();
+        .map_err(|e| PgWireError::ApiError(Box::new(e)))
+        .map_ok(move |rb| {
             let rows = rb.num_rows();
             let cols = rb.num_columns();
 
@@ -50,7 +49,7 @@ pub async fn encode_dataframe<'a>(
 
             stream::iter(row_stream)
         })
-        .flatten();
+        .try_flatten();
 
     Ok(QueryResponse::new(fields, pg_row_stream))
 }
