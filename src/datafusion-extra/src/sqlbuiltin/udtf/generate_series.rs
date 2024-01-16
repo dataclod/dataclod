@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use datafusion::arrow::array::Int64Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::common::{exec_err, DataFusionError, ScalarValue};
+use datafusion::common::{plan_err, DataFusionError, ScalarValue};
 use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
@@ -14,6 +14,36 @@ use datafusion::logical_expr::{Expr, TableType};
 use datafusion::optimizer::simplify_expressions::{ExprSimplifier, SimplifyContext};
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
+
+pub struct GenerateSeriesUDTF {}
+
+impl TableFunctionImpl for GenerateSeriesUDTF {
+    fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {
+        if exprs.len() < 2 || exprs.len() > 3 {
+            return plan_err!("generate_series takes 2 or 3 arguments");
+        }
+
+        let execution_props = ExecutionProps::new();
+        let info = SimplifyContext::new(&execution_props);
+        let simplifier = ExprSimplifier::new(info);
+        let start = simplifier.simplify(exprs[0].clone())?;
+        let stop = simplifier.simplify(exprs[1].clone())?;
+        let step = if exprs.len() == 3 {
+            simplifier.simplify(exprs[2].clone())?
+        } else {
+            Expr::Literal(ScalarValue::Int64(Some(1)))
+        };
+
+        match (start, stop, step) {
+            (
+                Expr::Literal(ScalarValue::Int64(Some(start))),
+                Expr::Literal(ScalarValue::Int64(Some(stop))),
+                Expr::Literal(ScalarValue::Int64(Some(step))),
+            ) => Ok(Arc::new(GenerateSeriesTable { start, stop, step })),
+            _ => plan_err!("generate_series arguments must be integer literals"),
+        }
+    }
+}
 
 struct GenerateSeriesTable<T: Send + Sync> {
     start: T,
@@ -31,12 +61,12 @@ impl TableProvider for GenerateSeriesTable<i64> {
         Arc::new(Schema::new(vec![Field::new(
             "generate_series",
             DataType::Int64,
-            true,
+            false,
         )]))
     }
 
     fn table_type(&self) -> TableType {
-        TableType::Base
+        TableType::Temporary
     }
 
     async fn scan(
@@ -47,46 +77,18 @@ impl TableProvider for GenerateSeriesTable<i64> {
         let array: Int64Array = (self.start..=self.stop)
             .step_by(self.step as usize)
             .collect();
-        let batches = vec![RecordBatch::try_new(schema, vec![Arc::new(array)])?];
+        let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])?;
         Ok(Arc::new(MemoryExec::try_new(
-            &[batches],
+            &[vec![batch]],
             self.schema(),
             projection.cloned(),
         )?))
     }
 }
 
-pub struct GenerateSeriesUDTF {}
-
-impl TableFunctionImpl for GenerateSeriesUDTF {
-    fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {
-        let execution_props = ExecutionProps::new();
-        let info = SimplifyContext::new(&execution_props);
-        let start = ExprSimplifier::new(info).simplify(exprs[0].clone())?;
-        let execution_props = ExecutionProps::new();
-        let info = SimplifyContext::new(&execution_props);
-        let stop = ExprSimplifier::new(info).simplify(exprs[1].clone())?;
-        let execution_props = ExecutionProps::new();
-        let step = if exprs.len() == 3 {
-            let info = SimplifyContext::new(&execution_props);
-            ExprSimplifier::new(info).simplify(exprs[2].clone())?
-        } else {
-            Expr::Literal(ScalarValue::Int64(Some(1)))
-        };
-
-        match (start, stop, step) {
-            (
-                Expr::Literal(ScalarValue::Int64(Some(start))),
-                Expr::Literal(ScalarValue::Int64(Some(stop))),
-                Expr::Literal(ScalarValue::Int64(Some(step))),
-            ) => Ok(Arc::new(GenerateSeriesTable { start, stop, step })),
-            _ => exec_err!("Limit must be an integer"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use datafusion::assert_batches_eq;
     use datafusion::execution::context::SessionContext;
 
     use super::*;
@@ -97,8 +99,21 @@ mod tests {
 
         ctx.register_udtf("generate_series", Arc::new(GenerateSeriesUDTF {}));
 
-        let df = ctx.sql("SELECT * FROM generate_series(1, 1);").await?;
-        df.show().await?;
+        let df = ctx.sql("SELECT * FROM generate_series(1, 4)").await?;
+        let batches = df.collect().await?;
+        assert_batches_eq!(
+            &[
+                "+-----------------+",
+                "| generate_series |",
+                "+-----------------+",
+                "| 1               |",
+                "| 2               |",
+                "| 3               |",
+                "| 4               |",
+                "+-----------------+",
+            ],
+            &batches
+        );
 
         Ok(())
     }

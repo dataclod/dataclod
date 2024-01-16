@@ -2,8 +2,6 @@ use anyhow::Result;
 use datafusion::dataframe::DataFrame;
 use datafusion::execution::context::{SessionConfig, SessionContext, SessionState};
 use datafusion::logical_expr::{LogicalPlan, LogicalPlanBuilder, Statement};
-use datafusion_extra::catalog::with_pg_catalog;
-use datafusion_extra::sqlbuiltin::{register_udf, register_udtf};
 
 pub struct QueryContext {
     inner: SessionContext,
@@ -19,9 +17,10 @@ impl QueryContext {
     pub fn new() -> Self {
         let cfg = SessionConfig::new().with_information_schema(true);
         let ctx = SessionContext::new_with_config(cfg);
-        with_pg_catalog(&ctx).unwrap();
-        register_udtf(&ctx);
-        register_udf(&ctx);
+        datafusion_extra::catalog::with_pg_catalog(&ctx).unwrap();
+        datafusion_extra::sqlbuiltin::register_udtf(&ctx);
+        datafusion_extra::sqlbuiltin::register_udf(&ctx);
+        crate::expr::register_udtf(&ctx);
 
         Self { inner: ctx }
     }

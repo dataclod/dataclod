@@ -4,7 +4,7 @@ use std::sync::Arc;
 use datafusion::arrow::array::{Array, ArrayRef, Int64Builder};
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::cast::{as_int64_array, as_list_array};
-use datafusion::common::{exec_err, not_impl_err, Result as DFResult};
+use datafusion::common::{not_impl_err, plan_err, Result as DFResult};
 use datafusion::error::DataFusionError;
 use datafusion::logical_expr::{
     ReturnTypeFunction, ScalarUDF, Signature, TypeSignature, Volatility,
@@ -31,12 +31,12 @@ fn array_upper(args: &[ArrayRef]) -> DFResult<ArrayRef> {
     match args[0].data_type() {
         DataType::List(_) => {}
         other => {
-            return exec_err!(
+            return plan_err!(
                 "anyarray argument must be a List of numeric values, actual: {}",
                 other
             );
         }
-    };
+    }
 
     let anyarray = as_list_array(&args[0]).unwrap();
     let dims = if args.len() == 2 {
@@ -46,18 +46,14 @@ fn array_upper(args: &[ArrayRef]) -> DFResult<ArrayRef> {
     };
 
     let mut builder = Int64Builder::with_capacity(anyarray.len());
-
     for (idx, element) in anyarray.iter().enumerate() {
-        let dim = match dims {
-            Some(dims) => {
-                if dims.is_null(idx) {
-                    -1
-                } else {
-                    dims.value(idx)
-                }
+        let dim = dims.map_or(1, |dims| {
+            if dims.is_null(idx) {
+                -1
+            } else {
+                dims.value(idx)
             }
-            None => 1,
-        };
+        });
 
         match dim.cmp(&1) {
             Ordering::Less => builder.append_null(),
