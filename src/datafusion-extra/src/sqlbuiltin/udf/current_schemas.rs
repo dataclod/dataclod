@@ -10,7 +10,7 @@ use datafusion::physical_plan::functions::make_scalar_function;
 pub fn create_udf() -> ScalarUDF {
     let current_schemas = make_scalar_function(current_schemas);
 
-    let return_type: ReturnTypeFunction = Arc::new(move |_| {
+    let return_type: ReturnTypeFunction = Arc::new(|_| {
         Ok(Arc::new(DataType::List(Arc::new(Field::new(
             "item",
             DataType::Utf8,

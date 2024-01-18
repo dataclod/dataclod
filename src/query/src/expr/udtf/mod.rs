@@ -1,8 +1,8 @@
+mod postgres_scan;
+
 use std::sync::Arc;
 
 use datafusion::execution::context::SessionContext;
-
-mod postgres_scan;
 
 pub fn register_udtf(ctx: &SessionContext) {
     ctx.register_udtf(

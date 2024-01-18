@@ -14,7 +14,7 @@ use datafusion::physical_plan::functions::make_scalar_function;
 pub fn create_udf() -> ScalarUDF {
     let array_upper = make_scalar_function(array_upper);
 
-    let return_type: ReturnTypeFunction = Arc::new(move |_| Ok(Arc::new(DataType::Int64)));
+    let return_type: ReturnTypeFunction = Arc::new(|_| Ok(Arc::new(DataType::Int64)));
 
     ScalarUDF::new(
         "array_upper",

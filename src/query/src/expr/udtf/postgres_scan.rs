@@ -1,15 +1,16 @@
-use std::any::Any;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use datafusion::arrow::datatypes::SchemaRef;
+use datafusion::arrow::datatypes::{Field, Schema};
 use datafusion::common::{plan_err, DataFusionError, ScalarValue};
 use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
-use datafusion::execution::context::SessionState;
-use datafusion::logical_expr::{Expr, TableType};
-use datafusion::physical_plan::ExecutionPlan;
+use datafusion::logical_expr::Expr;
+use tokio::runtime::Handle;
+use tokio_postgres::NoTls;
+use tracing::error;
+
+use crate::datasource::{postgres_to_arrow, PostgresTable};
 
 pub struct PostgresScanUDTF {}
 
@@ -20,50 +21,48 @@ impl TableFunctionImpl for PostgresScanUDTF {
         }
 
         let dsn = &exprs[0];
-        let schema = &exprs[1];
+        let db = &exprs[1];
         let table = &exprs[2];
 
-        match (dsn, schema, table) {
+        match (dsn, db, table) {
             (
                 Expr::Literal(ScalarValue::Utf8(Some(dsn))),
-                Expr::Literal(ScalarValue::Utf8(Some(schema))),
+                Expr::Literal(ScalarValue::Utf8(Some(db))),
                 Expr::Literal(ScalarValue::Utf8(Some(table))),
             ) => {
-                Ok(Arc::new(PostgresScanTable {
-                    dsn: dsn.to_owned(),
-                    schema: schema.to_owned(),
-                    table: table.to_owned(),
+                let query = format!("SELECT * FROM {}.{}", db, table);
+                // HACK: better way to do this?
+                let (client, stmt) = tokio::task::block_in_place(|| {
+                    Handle::current().block_on(async {
+                        let (client, conn) = tokio_postgres::connect(dsn, NoTls).await?;
+                        tokio::spawn(async move {
+                            if let Err(e) = conn.await {
+                                error!("connection error: {}", e);
+                            }
+                        });
+                        let stmt = client.prepare(&query).await?;
+                        Ok::<_, tokio_postgres::Error>((client, stmt))
+                    })
+                })
+                .map_err(|e| DataFusionError::Execution(e.to_string()))?;
+
+                let columns = stmt.columns();
+                let mut fields = Vec::with_capacity(columns.len());
+                for column in columns {
+                    let filed_type = postgres_to_arrow(column.type_())
+                        .map_err(|e| DataFusionError::NotImplemented(e.to_string()))?;
+                    let field = Field::new(column.name(), filed_type, true);
+                    fields.push(field);
+                }
+                let schema = Arc::new(Schema::new(fields));
+
+                Ok(Arc::new(PostgresTable {
+                    client,
+                    schema,
+                    query,
                 }))
             }
             _ => plan_err!("postgres_scan arguments must be string literals"),
         }
-    }
-}
-
-struct PostgresScanTable {
-    dsn: String,
-    schema: String,
-    table: String,
-}
-
-#[async_trait]
-impl TableProvider for PostgresScanTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn schema(&self) -> SchemaRef {
-        todo!()
-    }
-
-    fn table_type(&self) -> TableType {
-        TableType::Temporary
-    }
-
-    async fn scan(
-        &self, _state: &SessionState, _projection: Option<&Vec<usize>>, _filters: &[Expr],
-        _limit: Option<usize>,
-    ) -> Result<Arc<dyn ExecutionPlan>> {
-        todo!()
     }
 }

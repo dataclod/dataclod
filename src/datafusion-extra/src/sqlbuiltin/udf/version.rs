@@ -11,7 +11,7 @@ const DATACLOD_VERSION: &str = "PostgreSQL 14.10 on dataclod";
 pub fn create_udf() -> ScalarUDF {
     let version = make_scalar_function(version);
 
-    let return_type: ReturnTypeFunction = Arc::new(move |_| Ok(Arc::new(DataType::Utf8)));
+    let return_type: ReturnTypeFunction = Arc::new(|_| Ok(Arc::new(DataType::Utf8)));
 
     ScalarUDF::new(
         "version",

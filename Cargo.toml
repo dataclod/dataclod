@@ -73,3 +73,4 @@ futures = "0.3.29"
 num-traits = "0.2.17"
 tikv-jemallocator = "0.5.4"
 tokio = { version = "1.34", features = ["full"] }
+tracing = "0.1.40"
