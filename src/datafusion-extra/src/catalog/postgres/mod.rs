@@ -18,7 +18,7 @@ pub fn with_pg_catalog(ctx: &SessionContext) -> Result<()> {
 
     let default_catalog = ctx
         .catalog(&ctx.state().config_options().catalog.default_catalog)
-        .unwrap();
+        .expect("Failed to get default catalog");
     default_catalog.register_schema("pg_catalog", Arc::new(pg_catalog))?;
     Ok(())
 }

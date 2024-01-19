@@ -17,7 +17,7 @@ impl QueryContext {
     pub fn new() -> Self {
         let cfg = SessionConfig::new().with_information_schema(true);
         let ctx = SessionContext::new_with_config(cfg);
-        datafusion_extra::catalog::with_pg_catalog(&ctx).unwrap();
+        datafusion_extra::catalog::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");
         datafusion_extra::sqlbuiltin::register_udtf(&ctx);
         datafusion_extra::sqlbuiltin::register_udf(&ctx);
         crate::expr::register_udtf(&ctx);

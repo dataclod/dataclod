@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
+use chrono::{Datelike, NaiveDate};
 use datafusion::arrow::array::{
     ArrayRef, BooleanBuilder, Date32Builder, Float32Builder, Float64Builder, Int16Builder,
-    Int32Builder, Int64Builder, Int8Builder, NullArray, StringBuilder,
+    Int32Builder, Int64Builder, Int8Builder, NullArray, StringBuilder, UInt32Builder,
 };
-use datafusion::arrow::datatypes::{DataType, Field, SchemaRef, TimeUnit};
+use datafusion::arrow::datatypes::{DataType, Field, IntervalUnit, SchemaRef, TimeUnit};
 use datafusion::arrow::record_batch::RecordBatch;
 use tokio_postgres::types::{Kind, Type};
 use tokio_postgres::Row;
@@ -20,13 +21,16 @@ pub fn postgres_to_arrow(pg_type: &Type) -> Result<DataType> {
                 Type::INT2 => DataType::Int16,
                 Type::INT4 => DataType::Int32,
                 Type::INT8 => DataType::Int64,
+                Type::OID => DataType::UInt32,
                 Type::FLOAT4 => DataType::Float32,
                 Type::FLOAT8 => DataType::Float64,
                 Type::TIMESTAMP => DataType::Timestamp(TimeUnit::Microsecond, None),
                 Type::DATE => DataType::Date32,
-                Type::TIME => DataType::Time32(TimeUnit::Millisecond),
+                Type::TIME => DataType::Time32(TimeUnit::Microsecond),
+                Type::INTERVAL => DataType::Interval(IntervalUnit::MonthDayNano),
+                Type::NUMERIC => DataType::Decimal256(0, 0),
                 Type::BYTEA => DataType::Binary,
-                Type::TEXT | Type::BPCHAR | Type::VARCHAR => DataType::Utf8,
+                Type::NAME | Type::TEXT | Type::BPCHAR | Type::VARCHAR => DataType::Utf8,
                 _ => bail!("Unsupported postgres type: {}", pg_type),
             }
         }
@@ -50,6 +54,13 @@ pub fn postgres_to_arrow(pg_type: &Type) -> Result<DataType> {
                 }
                 Type::INT8 => {
                     DataType::List(Arc::new(Field::new("array_element", DataType::Int64, true)))
+                }
+                Type::OID => {
+                    DataType::List(Arc::new(Field::new(
+                        "array_element",
+                        DataType::UInt32,
+                        true,
+                    )))
                 }
                 Type::FLOAT4 => {
                     DataType::List(Arc::new(Field::new(
@@ -82,7 +93,21 @@ pub fn postgres_to_arrow(pg_type: &Type) -> Result<DataType> {
                 Type::TIME => {
                     DataType::List(Arc::new(Field::new(
                         "array_element",
-                        DataType::Time32(TimeUnit::Millisecond),
+                        DataType::Time32(TimeUnit::Microsecond),
+                        true,
+                    )))
+                }
+                Type::INTERVAL => {
+                    DataType::List(Arc::new(Field::new(
+                        "array_element",
+                        DataType::Interval(IntervalUnit::MonthDayNano),
+                        true,
+                    )))
+                }
+                Type::NUMERIC => {
+                    DataType::List(Arc::new(Field::new(
+                        "array_element",
+                        DataType::Decimal256(0, 0),
                         true,
                     )))
                 }
@@ -93,7 +118,7 @@ pub fn postgres_to_arrow(pg_type: &Type) -> Result<DataType> {
                         true,
                     )))
                 }
-                Type::VARCHAR | Type::TEXT => {
+                Type::NAME | Type::TEXT | Type::BPCHAR | Type::VARCHAR => {
                     DataType::List(Arc::new(Field::new("array_element", DataType::Utf8, true)))
                 }
                 _ => bail!("Unsupported postgres type: {}", pg_type),
@@ -151,6 +176,14 @@ pub fn encode_postgres_rows(rows: &[Row], schema: &SchemaRef) -> Result<RecordBa
                 }
                 columns.push(Arc::new(builder.finish()));
             }
+            DataType::UInt32 => {
+                let mut builder = UInt32Builder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<u32> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
             DataType::Float32 => {
                 let mut builder = Float32Builder::with_capacity(row_len);
                 for row in rows {
@@ -170,8 +203,8 @@ pub fn encode_postgres_rows(rows: &[Row], schema: &SchemaRef) -> Result<RecordBa
             DataType::Date32 => {
                 let mut builder = Date32Builder::with_capacity(row_len);
                 for row in rows {
-                    let value: Option<i32> = row.get(col);
-                    builder.append_option(value);
+                    let value: Option<NaiveDate> = row.get(col);
+                    builder.append_option(value.map(|v| v.num_days_from_ce()));
                 }
                 columns.push(Arc::new(builder.finish()));
             }

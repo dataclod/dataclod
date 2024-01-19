@@ -4,7 +4,7 @@ use std::sync::Arc;
 use datafusion::arrow::array::{Array, ArrayRef, Int64Builder};
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::cast::{as_int64_array, as_list_array};
-use datafusion::common::{not_impl_err, plan_err, Result as DFResult};
+use datafusion::common::{not_impl_err, plan_datafusion_err, Result as DFResult};
 use datafusion::error::DataFusionError;
 use datafusion::logical_expr::{
     ReturnTypeFunction, ScalarUDF, Signature, TypeSignature, Volatility,
@@ -28,17 +28,12 @@ pub fn create_udf() -> ScalarUDF {
 }
 
 fn array_upper(args: &[ArrayRef]) -> DFResult<ArrayRef> {
-    match args[0].data_type() {
-        DataType::List(_) => {}
-        other => {
-            return plan_err!(
-                "anyarray argument must be a List of numeric values, actual: {}",
-                other
-            );
-        }
-    }
-
-    let anyarray = as_list_array(&args[0]).unwrap();
+    let anyarray = as_list_array(&args[0]).map_err(|_| {
+        plan_datafusion_err!(
+            "argument of array_upper must be an array, actual: {}",
+            args[0].data_type()
+        )
+    })?;
     let dims = if args.len() == 2 {
         as_int64_array(&args[1]).ok()
     } else {

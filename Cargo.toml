@@ -67,6 +67,7 @@ server = { package = "dataclod-server", path = "src/server", version = "0.0.2" }
 # crates.io dependencies
 anyhow = "1.0"
 async-trait = "0.1"
+chrono = "0.4.31"
 dashmap = "5.5"
 datafusion = { version = "34.0", features = ["simd", "serde"] }
 futures = "0.3.29"

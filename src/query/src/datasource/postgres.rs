@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use datafusion::arrow::datatypes::SchemaRef;
-use datafusion::common::Result;
+use datafusion::common::{exec_datafusion_err, Result};
 use datafusion::datasource::TableProvider;
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::SessionState;
@@ -75,20 +75,31 @@ impl PartitionStream for PostgresStream {
         let client = self.client.clone();
         let query = self.query.to_owned();
         let schema = self.schema.clone();
+
         builder.spawn(async move {
             let row_stream = client
+            // HACK: unable to infer type
                 .query_raw::<_, bool, _>(&query, Vec::new())
                 .await
-                .unwrap()
-                .try_chunks(128);
+                .map_err(|e| exec_datafusion_err!("Failed to execute query: {}", e))?;
+            let row_stream = row_stream.try_chunks(128);
             pin_mut!(row_stream);
-            while let Some(rows) = row_stream.try_next().await.unwrap() {
-                tx.blocking_send(
+
+            while let Some(rows) = row_stream
+                .try_next()
+                .await
+                .map_err(|e| exec_datafusion_err!("Failed to receive rows from database: {}", e))?
+            {
+                tx.send(
                     encode_postgres_rows(&rows, &schema)
                         .map_err(|e| DataFusionError::NotImplemented(e.to_string())),
                 )
-                .unwrap();
+                .await
+                .map_err(|e| {
+                    exec_datafusion_err!("Failed to send record batch to receiver: {}", e)
+                })?;
             }
+
             Ok(())
         });
 

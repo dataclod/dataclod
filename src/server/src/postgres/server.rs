@@ -28,7 +28,9 @@ impl ServerParameterProvider for DataClodParameterProvider {
 }
 
 pub async fn server(tcp_addr: String) {
-    let listener = TcpListener::bind(&tcp_addr).await.unwrap();
+    let listener = TcpListener::bind(&tcp_addr)
+        .await
+        .expect("Failed to bind TCP listener");
 
     let authenticator = Arc::new(MakeDataClodStartupHandler::new(
         Arc::new(DataClodAuthSource),
@@ -37,7 +39,7 @@ pub async fn server(tcp_addr: String) {
     let processor = Arc::new(MakePostgresBackend::new());
 
     loop {
-        let (incoming_socket, _) = listener.accept().await.unwrap();
+        let (incoming_socket, _) = listener.accept().await.expect("Failed to accept socket");
         let authenticator_ref = authenticator.make();
         let processor_ref = processor.make();
 
