@@ -57,7 +57,7 @@ impl TableFunctionImpl for PostgresScanUDTF {
                 let schema = Arc::new(Schema::new(fields));
 
                 Ok(Arc::new(PostgresTable {
-                    client,
+                    client: Arc::new(client),
                     schema,
                     query,
                 }))

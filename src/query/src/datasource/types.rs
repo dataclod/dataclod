@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use datafusion::arrow::datatypes::{DataType, Field, TimeUnit};
+use datafusion::arrow::array::{
+    ArrayRef, BooleanBuilder, Date32Builder, Float32Builder, Float64Builder, Int16Builder,
+    Int32Builder, Int64Builder, Int8Builder, NullArray, StringBuilder,
+};
+use datafusion::arrow::datatypes::{DataType, Field, SchemaRef, TimeUnit};
 use datafusion::arrow::record_batch::RecordBatch;
 use tokio_postgres::types::{Kind, Type};
 use tokio_postgres::Row;
@@ -22,7 +26,7 @@ pub fn postgres_to_arrow(pg_type: &Type) -> Result<DataType> {
                 Type::DATE => DataType::Date32,
                 Type::TIME => DataType::Time32(TimeUnit::Millisecond),
                 Type::BYTEA => DataType::Binary,
-                Type::VARCHAR | Type::TEXT => DataType::Utf8,
+                Type::TEXT | Type::BPCHAR | Type::VARCHAR => DataType::Utf8,
                 _ => bail!("Unsupported postgres type: {}", pg_type),
             }
         }
@@ -99,6 +103,88 @@ pub fn postgres_to_arrow(pg_type: &Type) -> Result<DataType> {
     })
 }
 
-pub fn encode_postgres_rows(_rows: &[Row]) -> Result<RecordBatch> {
-    todo!()
+pub fn encode_postgres_rows(rows: &[Row], schema: &SchemaRef) -> Result<RecordBatch> {
+    let row_len = rows.len();
+    let col_len = schema.fields().len();
+
+    let mut columns = Vec::<ArrayRef>::with_capacity(col_len);
+    for col in 0..col_len {
+        match schema.field(col).data_type() {
+            DataType::Null => columns.push(Arc::new(NullArray::new(row_len))),
+            DataType::Boolean => {
+                let mut builder = BooleanBuilder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<bool> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            DataType::Int8 => {
+                let mut builder = Int8Builder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<i8> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            DataType::Int16 => {
+                let mut builder = Int16Builder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<i16> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            DataType::Int32 => {
+                let mut builder = Int32Builder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<i32> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            DataType::Int64 => {
+                let mut builder = Int64Builder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<i64> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            DataType::Float32 => {
+                let mut builder = Float32Builder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<f32> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            DataType::Float64 => {
+                let mut builder = Float64Builder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<f64> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            DataType::Date32 => {
+                let mut builder = Date32Builder::with_capacity(row_len);
+                for row in rows {
+                    let value: Option<i32> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            DataType::Utf8 => {
+                let mut builder = StringBuilder::with_capacity(row_len, 0);
+                for row in rows {
+                    let value: Option<&str> = row.get(col);
+                    builder.append_option(value);
+                }
+                columns.push(Arc::new(builder.finish()));
+            }
+            data_type => bail!("Unsupported data type: {}", data_type),
+        }
+    }
+    Ok(RecordBatch::try_new(schema.clone(), columns)?)
 }
