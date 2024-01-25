@@ -5,14 +5,49 @@ use datafusion::arrow::array::*;
 use datafusion::arrow::datatypes::{DataType, TimeUnit};
 use datafusion::common::DFSchema;
 use datafusion::prelude::DataFrame;
+use datafusion::scalar::ScalarValue;
+use datafusion::sql::parser::Statement;
 use futures::{stream, TryStreamExt};
 use num_traits::NumCast;
-use pgwire::api::portal::Format;
+use pgwire::api::portal::{Format, Portal};
 use pgwire::api::results::{DataRowEncoder, FieldInfo, QueryResponse};
 use pgwire::api::Type;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 
 use super::utils::*;
+
+pub fn encode_parameters(portal: &Portal<Statement>) -> PgWireResult<Vec<ScalarValue>> {
+    portal
+        .statement
+        .parameter_types
+        .iter()
+        .enumerate()
+        .map(|(i, parameter_type)| {
+            Ok(match parameter_type {
+                &Type::UNKNOWN => ScalarValue::Null,
+                &Type::BOOL => ScalarValue::Boolean(portal.parameter(i, &Type::BOOL)?),
+                &Type::CHAR => ScalarValue::Int8(portal.parameter(i, &Type::CHAR)?),
+                &Type::INT2 => ScalarValue::Int16(portal.parameter(i, &Type::INT2)?),
+                &Type::INT4 => ScalarValue::Int32(portal.parameter(i, &Type::INT4)?),
+                &Type::INT8 => ScalarValue::Int64(portal.parameter(i, &Type::INT8)?),
+                &Type::OID => ScalarValue::UInt32(portal.parameter(i, &Type::OID)?),
+                &Type::FLOAT4 => ScalarValue::Float32(portal.parameter(i, &Type::FLOAT4)?),
+                &Type::FLOAT8 => ScalarValue::Float64(portal.parameter(i, &Type::FLOAT8)?),
+                &Type::TIMESTAMP => {
+                    ScalarValue::TimestampMicrosecond(portal.parameter(i, &Type::TIMESTAMP)?, None)
+                }
+                &Type::DATE => ScalarValue::Date32(portal.parameter(i, &Type::DATE)?),
+                &Type::TIME => ScalarValue::Time64Microsecond(portal.parameter(i, &Type::TIME)?),
+                &Type::BYTEA => ScalarValue::Binary(portal.parameter(i, &Type::BYTEA)?),
+                &Type::NAME => ScalarValue::Utf8(portal.parameter(i, &Type::NAME)?),
+                &Type::TEXT => ScalarValue::Utf8(portal.parameter(i, &Type::TEXT)?),
+                &Type::BPCHAR => ScalarValue::Utf8(portal.parameter(i, &Type::BPCHAR)?),
+                &Type::VARCHAR => ScalarValue::Utf8(portal.parameter(i, &Type::VARCHAR)?),
+                typ => return Err(PgWireError::InvalidRustTypeForParameter(typ.to_string())),
+            })
+        })
+        .collect()
+}
 
 pub async fn encode_dataframe<'a>(
     df: DataFrame, format: &Format,
@@ -78,7 +113,8 @@ pub fn into_pg_type(df_type: &DataType) -> PgWireResult<Type> {
         DataType::Boolean => Type::BOOL,
         DataType::Int8 | DataType::UInt8 => Type::CHAR,
         DataType::Int16 | DataType::UInt16 => Type::INT2,
-        DataType::Int32 | DataType::UInt32 => Type::INT4,
+        DataType::Int32 => Type::INT4,
+        DataType::UInt32 => Type::OID,
         DataType::Int64 | DataType::UInt64 => Type::INT8,
         DataType::Float32 => Type::FLOAT4,
         DataType::Float64 => Type::FLOAT8,
@@ -92,7 +128,8 @@ pub fn into_pg_type(df_type: &DataType) -> PgWireResult<Type> {
                 DataType::Boolean => Type::BOOL_ARRAY,
                 DataType::Int8 | DataType::UInt8 => Type::CHAR_ARRAY,
                 DataType::Int16 | DataType::UInt16 => Type::INT2_ARRAY,
-                DataType::Int32 | DataType::UInt32 => Type::INT4_ARRAY,
+                DataType::Int32 => Type::INT4_ARRAY,
+                DataType::UInt32 => Type::OID_ARRAY,
                 DataType::Int64 | DataType::UInt64 => Type::INT8_ARRAY,
                 DataType::Float32 => Type::FLOAT4_ARRAY,
                 DataType::Float64 => Type::FLOAT8_ARRAY,

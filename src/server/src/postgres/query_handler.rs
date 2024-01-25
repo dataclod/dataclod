@@ -11,7 +11,7 @@ use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 use query::QueryContext;
 
 use super::query_parser::DataClodQueryParser;
-use super::types::{encode_dataframe, encode_schema};
+use super::types::{encode_dataframe, encode_parameters, encode_schema};
 
 pub struct PostgresBackend {
     pub session_context: Arc<QueryContext>,
@@ -33,7 +33,7 @@ impl SimpleQueryHandler for PostgresBackend {
         let df = ctx
             .sql(query)
             .await
-            .map_err(|err| PgWireError::ApiError(err.into()))?;
+            .map_err(|e| PgWireError::ApiError(e.into()))?;
         let resp = encode_dataframe(df, &Format::UnifiedText).await?;
 
         Ok(vec![Response::Query(resp)])
@@ -62,11 +62,20 @@ impl ExtendedQueryHandler for PostgresBackend {
         let df = ctx
             .sql(&stmt.to_string())
             .await
-            .map_err(|err| PgWireError::ApiError(err.into()))?;
+            .map_err(|e| PgWireError::ApiError(e.into()))?;
 
-        let resp = encode_dataframe(df, &Format::UnifiedText).await?;
-
-        Ok(Response::Query(resp))
+        // TODO: better error handling
+        if portal.statement.parameter_types.is_empty() {
+            let resp = encode_dataframe(df, &Format::UnifiedText).await?;
+            Ok(Response::Query(resp))
+        } else {
+            let parameters = encode_parameters(portal)?;
+            let df = df
+                .with_param_values(parameters)
+                .map_err(|e| PgWireError::ApiError(e.into()))?;
+            let resp = encode_dataframe(df, &Format::UnifiedText).await?;
+            Ok(Response::Query(resp))
+        }
     }
 
     async fn do_describe<C>(
@@ -114,11 +123,28 @@ impl ExtendedQueryHandler for PostgresBackend {
                             format!("Failed to create logical plan: {}", e),
                         )))
                     })?;
-                let schema = plan.schema();
+                if portal.statement.parameter_types.is_empty() {
+                    let schema = plan.schema();
 
-                let format = &portal.result_column_format;
-                let fields = encode_schema(schema, format)?;
-                Ok(DescribeResponse::new(None, fields))
+                    let format = &portal.result_column_format;
+                    let fields = encode_schema(schema, format)?;
+                    Ok(DescribeResponse::new(None, fields))
+                } else {
+                    // XXX: need with_param_values here?
+                    let parameters = encode_parameters(portal)?;
+                    let plan = plan.with_param_values(parameters).map_err(|e| {
+                        PgWireError::UserError(Box::new(ErrorInfo::new(
+                            "ERROR".to_owned(),
+                            "XX000".to_owned(),
+                            format!("Failed to create logical plan: {}", e),
+                        )))
+                    })?;
+                    let schema = plan.schema();
+
+                    let format = &portal.result_column_format;
+                    let fields = encode_schema(schema, format)?;
+                    Ok(DescribeResponse::new(None, fields))
+                }
             }
         }
     }
