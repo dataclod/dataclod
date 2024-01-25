@@ -110,6 +110,7 @@ pub fn into_pg_type(df_type: &DataType) -> PgWireResult<Type> {
                 }
             }
         }
+        DataType::Decimal128(..) | DataType::Decimal256(..) => Type::NUMERIC,
         _ => {
             return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
                 "ERROR".to_owned(),
@@ -192,6 +193,12 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                 }
                 DataType::Utf8 => encode_utf8_list_value(encoder, arr, idx)?,
                 DataType::LargeUtf8 => encode_large_utf8_list_value(encoder, arr, idx)?,
+                DataType::Decimal128(_precision, _scale) => {
+                    todo!()
+                }
+                DataType::Decimal256(_precision, _scale) => {
+                    todo!()
+                }
                 list_type => {
                     return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
                         "ERROR".to_owned(),
@@ -250,6 +257,12 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                 }
                 DataType::Utf8 => encode_utf8_large_list_value(encoder, arr, idx)?,
                 DataType::LargeUtf8 => encode_large_utf8_large_list_value(encoder, arr, idx)?,
+                DataType::Decimal128(_precision, _scale) => {
+                    todo!()
+                }
+                DataType::Decimal256(_precision, _scale) => {
+                    todo!()
+                }
                 list_type => {
                     return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
                         "ERROR".to_owned(),
@@ -310,6 +323,12 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                 }
                 DataType::Utf8 => encode_utf8_fixed_size_list_value(encoder, arr, idx)?,
                 DataType::LargeUtf8 => encode_large_utf8_fixed_size_list_value(encoder, arr, idx)?,
+                DataType::Decimal128(_precision, _scale) => {
+                    todo!()
+                }
+                DataType::Decimal256(_precision, _scale) => {
+                    todo!()
+                }
                 list_type => {
                     return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
                         "ERROR".to_owned(),
@@ -321,6 +340,12 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                     ))));
                 }
             }
+        }
+        DataType::Decimal128(_precision, _scale) => {
+            todo!()
+        }
+        DataType::Decimal256(_precision, _scale) => {
+            todo!()
         }
 
         _ => {
