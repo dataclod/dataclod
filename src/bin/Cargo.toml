@@ -1,5 +1,5 @@
 [package]
-name = "dataclod"
+name = "dataclod-bin"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

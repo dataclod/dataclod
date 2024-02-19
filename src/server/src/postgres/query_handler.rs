@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use dataclod::QueryContext;
 use datafusion::sql::parser::Statement;
 use pgwire::api::portal::{Format, Portal};
 use pgwire::api::query::{ExtendedQueryHandler, SimpleQueryHandler, StatementOrPortal};
@@ -8,7 +9,6 @@ use pgwire::api::results::{DescribeResponse, Response};
 use pgwire::api::store::MemPortalStore;
 use pgwire::api::ClientInfo;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
-use query::QueryContext;
 
 use super::query_parser::DataClodQueryParser;
 use super::types::{encode_dataframe, encode_parameters, encode_schema};

@@ -666,16 +666,6 @@ dependencies = [
 name = "dataclod"
 version = "0.0.2"
 dependencies = [
- "dataclod-server",
- "rusky",
- "tikv-jemallocator",
- "tokio",
-]
-
-[[package]]
-name = "dataclod-query"
-version = "0.0.2"
-dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
@@ -688,12 +678,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "dataclod-bin"
+version = "0.0.2"
+dependencies = [
+ "dataclod-server",
+ "rusky",
+ "tikv-jemallocator",
+ "tokio",
+]
+
+[[package]]
 name = "dataclod-server"
 version = "0.0.2"
 dependencies = [
  "async-trait",
  "chrono",
- "dataclod-query",
+ "dataclod",
  "datafusion",
  "futures",
  "num-traits",

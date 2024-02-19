@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use dataclod::QueryContext;
 use pgwire::api::auth::{AuthSource, ServerParameterProvider};
 use pgwire::api::store::MemPortalStore;
 use pgwire::api::MakeHandler;
-use query::QueryContext;
 use tokio::sync::Mutex;
 
 use super::query_handler::PostgresBackend;
