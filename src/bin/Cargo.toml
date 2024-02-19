@@ -13,6 +13,9 @@ server.workspace = true
 tikv-jemallocator.workspace = true
 tokio.workspace = true
 
+[dev-dependencies]
+rusky = "0.2.1"
+
 [[bin]]
 name = "dataclod-core"
 path = "core/main.rs"
