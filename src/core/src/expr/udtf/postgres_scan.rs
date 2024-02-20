@@ -12,7 +12,7 @@ use tracing::error;
 
 use crate::datasource::{postgres_to_arrow, PostgresTable};
 
-pub struct PostgresScanUDTF {}
+pub struct PostgresScanUDTF;
 
 impl TableFunctionImpl for PostgresScanUDTF {
     fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {
@@ -30,7 +30,7 @@ impl TableFunctionImpl for PostgresScanUDTF {
                 Expr::Literal(ScalarValue::Utf8(Some(db))),
                 Expr::Literal(ScalarValue::Utf8(Some(table))),
             ) => {
-                let query = format!("SELECT * FROM {}.{}", db, table);
+                let query = format!("SELECT * FROM {db}.{table}");
                 // HACK: better way to do this?
                 let (client, stmt) = tokio::task::block_in_place(|| {
                     Handle::current().block_on(async {

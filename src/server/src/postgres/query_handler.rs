@@ -9,6 +9,7 @@ use pgwire::api::results::{DescribeResponse, Response};
 use pgwire::api::store::MemPortalStore;
 use pgwire::api::ClientInfo;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
+use tracing::debug;
 
 use super::query_parser::DataClodQueryParser;
 use super::types::{encode_dataframe, encode_parameters, encode_schema};
@@ -27,7 +28,7 @@ impl SimpleQueryHandler for PostgresBackend {
     where
         C: ClientInfo + Unpin + Send + Sync,
     {
-        println!("simple query: {}", query);
+        debug!("simple query: {}", query);
         let ctx = self.session_context.as_ref();
 
         let df = ctx
@@ -55,7 +56,7 @@ impl ExtendedQueryHandler for PostgresBackend {
     where
         C: ClientInfo + Unpin + Send + Sync,
     {
-        println!("extend query: {}", portal.statement.statement);
+        debug!("extend query: {}", portal.statement.statement);
         let ctx = self.session_context.as_ref();
 
         let stmt = &portal.statement.statement;
@@ -89,7 +90,7 @@ impl ExtendedQueryHandler for PostgresBackend {
         match target {
             StatementOrPortal::Statement(statement) => {
                 let stmt = &statement.statement;
-                println!("describe statement: {}", stmt);
+                debug!("describe statement: {}", stmt);
 
                 let plan = ctx
                     .state()
@@ -99,7 +100,7 @@ impl ExtendedQueryHandler for PostgresBackend {
                         PgWireError::UserError(Box::new(ErrorInfo::new(
                             "ERROR".to_owned(),
                             "XX000".to_owned(),
-                            format!("Failed to create logical plan: {}", e),
+                            format!("Failed to create logical plan: {e}"),
                         )))
                     })?;
                 let schema = plan.schema();
@@ -110,7 +111,7 @@ impl ExtendedQueryHandler for PostgresBackend {
             }
             StatementOrPortal::Portal(portal) => {
                 let stmt = &portal.statement.statement;
-                println!("describe portal: {}", stmt);
+                debug!("describe portal: {}", stmt);
 
                 let plan = ctx
                     .state()
@@ -120,7 +121,7 @@ impl ExtendedQueryHandler for PostgresBackend {
                         PgWireError::UserError(Box::new(ErrorInfo::new(
                             "ERROR".to_owned(),
                             "XX000".to_owned(),
-                            format!("Failed to create logical plan: {}", e),
+                            format!("Failed to create logical plan: {e}"),
                         )))
                     })?;
                 if portal.statement.parameter_types.is_empty() {
@@ -136,7 +137,7 @@ impl ExtendedQueryHandler for PostgresBackend {
                         PgWireError::UserError(Box::new(ErrorInfo::new(
                             "ERROR".to_owned(),
                             "XX000".to_owned(),
-                            format!("Failed to create logical plan: {}", e),
+                            format!("Failed to create logical plan: {e}"),
                         )))
                     })?;
                     let schema = plan.schema();

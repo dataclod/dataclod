@@ -45,7 +45,7 @@ impl TableProvider for PostgresTable {
         let stream = Arc::new(PostgresStream {
             client: self.client.clone(),
             schema: self.schema(),
-            query: self.query.to_owned(),
+            query: self.query.clone(),
         });
 
         Ok(Arc::new(StreamingTableExec::try_new(
@@ -73,7 +73,7 @@ impl PartitionStream for PostgresStream {
         let mut builder = RecordBatchReceiverStreamBuilder::new(self.schema.clone(), 2);
         let tx = builder.tx();
         let client = self.client.clone();
-        let query = self.query.to_owned();
+        let query = self.query.clone();
         let schema = self.schema.clone();
 
         builder.spawn(async move {

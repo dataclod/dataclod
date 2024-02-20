@@ -7,24 +7,44 @@ use datafusion::common::cast::{as_int64_array, as_list_array};
 use datafusion::common::{not_impl_err, plan_datafusion_err, Result as DFResult};
 use datafusion::error::DataFusionError;
 use datafusion::logical_expr::{
-    ReturnTypeFunction, ScalarUDF, Signature, TypeSignature, Volatility,
+    ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, TypeSignature, Volatility,
 };
 use datafusion::physical_plan::functions::make_scalar_function;
 
 pub fn create_udf() -> ScalarUDF {
-    let array_upper = make_scalar_function(array_upper);
-
-    let return_type: ReturnTypeFunction = Arc::new(|_| Ok(Arc::new(DataType::Int64)));
-
-    ScalarUDF::new(
-        "array_upper",
-        &Signature::one_of(
+    ScalarUDF::new_from_impl(ArrayUpper {
+        signature: Signature::one_of(
             vec![TypeSignature::Any(1), TypeSignature::Any(2)],
             Volatility::Immutable,
         ),
-        &return_type,
-        &array_upper,
-    )
+    })
+}
+
+#[derive(Debug)]
+struct ArrayUpper {
+    signature: Signature,
+}
+
+impl ScalarUDFImpl for ArrayUpper {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "array_upper"
+    }
+
+    fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    fn return_type(&self, _arg_types: &[DataType]) -> DFResult<DataType> {
+        Ok(DataType::Int64)
+    }
+
+    fn invoke(&self, args: &[ColumnarValue]) -> DFResult<ColumnarValue> {
+        make_scalar_function(array_upper)(args)
+    }
 }
 
 fn array_upper(args: &[ArrayRef]) -> DFResult<ArrayRef> {

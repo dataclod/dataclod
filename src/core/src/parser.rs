@@ -7,7 +7,7 @@ pub fn sql_to_statement(sql: &str) -> DFResult<Statement> {
         return not_impl_err!("The context currently only supports a single SQL statement");
     }
     let statement = statements.pop_front().ok_or_else(|| {
-        DataFusionError::NotImplemented("The context requires a statement!".to_string())
+        DataFusionError::NotImplemented("The context requires a statement!".to_owned())
     })?;
     Ok(statement)
 }

@@ -15,7 +15,7 @@ use datafusion::optimizer::simplify_expressions::{ExprSimplifier, SimplifyContex
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
 
-pub struct GenerateSeriesUDTF {}
+pub struct GenerateSeriesUDTF;
 
 impl TableFunctionImpl for GenerateSeriesUDTF {
     fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {

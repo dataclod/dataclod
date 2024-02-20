@@ -10,7 +10,7 @@ use super::make_handler::{MakeDataClodStartupHandler, MakePostgresBackend};
 
 const PG_VERSION: &str = "9.0";
 
-pub struct DataClodParameterProvider {}
+pub struct DataClodParameterProvider;
 
 impl ServerParameterProvider for DataClodParameterProvider {
     fn server_parameters<C>(&self, _client: &C) -> Option<HashMap<String, String>>

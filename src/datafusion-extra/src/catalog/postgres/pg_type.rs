@@ -26,7 +26,7 @@ impl PgTypeBuilder {
 
         Self {
             oid: UInt32Builder::with_capacity(capacity),
-            typname: StringBuilder::with_capacity(capacity, capacity),
+            typname: StringBuilder::with_capacity(capacity, 0),
             typnamespace: UInt32Builder::with_capacity(capacity),
         }
     }
@@ -37,19 +37,19 @@ impl PgTypeBuilder {
         self.typnamespace.append_value(typ.typnamespace);
     }
 
-    fn finish(mut self) -> Vec<ArrayRef> {
+    fn finish(mut self) -> Arc<[ArrayRef]> {
         let columns: Vec<ArrayRef> = vec![
             Arc::new(self.oid.finish()),
             Arc::new(self.typname.finish()),
             Arc::new(self.typnamespace.finish()),
         ];
 
-        columns
+        columns.into()
     }
 }
 
 pub struct PgTypeTable {
-    data: Arc<Vec<ArrayRef>>,
+    data: Arc<[ArrayRef]>,
 }
 
 impl PgTypeTable {
@@ -61,7 +61,7 @@ impl PgTypeTable {
         }
 
         Self {
-            data: Arc::new(builder.finish()),
+            data: builder.finish(),
         }
     }
 }

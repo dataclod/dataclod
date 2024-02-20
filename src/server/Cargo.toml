@@ -8,6 +8,9 @@ homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 async-trait.workspace = true
 chrono = "0.4.31"
@@ -18,3 +21,4 @@ num-traits.workspace = true
 pgwire = "0.19.1"
 rand = "0.8.5"
 tokio.workspace = true
+tracing.workspace = true

@@ -8,9 +8,13 @@ homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
 datafusion.workspace = true
-futures.workspace = true
+
+[dev-dependencies]
 tokio.workspace = true

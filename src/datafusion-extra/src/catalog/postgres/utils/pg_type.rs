@@ -28,7 +28,7 @@ macro_rules! define_pg_types {
             $($NAME = $OID,)*
         }
 
-        impl<'a> PgType<'a> {
+        impl PgType<'_> {
             pub fn get_all() -> Vec<&'static PgType<'static>> {
                 vec![
                     $($NAME,)*

@@ -10,7 +10,7 @@ async fn main() {
     let core_addr = format!(
         "{}:{}",
         "0.0.0.0",
-        std::env::var("DATACLOD_PORT").unwrap_or(DEFAULT_CORE_PORT.to_string())
+        std::env::var("DATACLOD_PORT").unwrap_or(DEFAULT_CORE_PORT.to_owned())
     );
     server::postgres::server(core_addr).await
 }

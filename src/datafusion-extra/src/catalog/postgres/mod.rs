@@ -12,7 +12,7 @@ use pg_type::PgTypeTable;
 
 pub fn with_pg_catalog(ctx: &SessionContext) -> Result<()> {
     let pg_catalog = MemorySchemaProvider::new();
-    pg_catalog.register_table("pg_type".to_string(), Arc::new(PgTypeTable::new()))?;
+    pg_catalog.register_table("pg_type".to_owned(), Arc::new(PgTypeTable::new()))?;
 
     ctx.register_table("public.pg_namespace", Arc::new(PgNamespaceTable::new()))?;
 
