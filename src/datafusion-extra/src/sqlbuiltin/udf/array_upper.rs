@@ -1,22 +1,19 @@
+use std::any::Any;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use datafusion::arrow::array::{Array, ArrayRef, Int64Builder};
+use datafusion::arrow::array::{Array, Int64Builder, NullArray};
 use datafusion::arrow::datatypes::DataType;
-use datafusion::common::cast::{as_int64_array, as_list_array};
-use datafusion::common::{not_impl_err, plan_datafusion_err, Result as DFResult};
-use datafusion::error::DataFusionError;
-use datafusion::logical_expr::{
-    ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, TypeSignature, Volatility,
+use datafusion::common::cast::as_list_array;
+use datafusion::common::{
+    not_impl_err, plan_datafusion_err, plan_err, Result as DFResult, ScalarValue,
 };
-use datafusion::physical_plan::functions::make_scalar_function;
+use datafusion::error::DataFusionError;
+use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
 
 pub fn create_udf() -> ScalarUDF {
     ScalarUDF::new_from_impl(ArrayUpper {
-        signature: Signature::one_of(
-            vec![TypeSignature::Any(1), TypeSignature::Any(2)],
-            Volatility::Immutable,
-        ),
+        signature: Signature::any(2, Volatility::Immutable),
     })
 }
 
@@ -26,7 +23,7 @@ struct ArrayUpper {
 }
 
 impl ScalarUDFImpl for ArrayUpper {
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
@@ -43,55 +40,92 @@ impl ScalarUDFImpl for ArrayUpper {
     }
 
     fn invoke(&self, args: &[ColumnarValue]) -> DFResult<ColumnarValue> {
-        make_scalar_function(array_upper)(args)
-    }
-}
+        match &args[0] {
+            ColumnarValue::Array(array) => {
+                let anyarrays = as_list_array(array).map_err(|_| {
+                    plan_datafusion_err!(
+                        "first argument of `array_upper` must be an array, actual: {}",
+                        array.data_type()
+                    )
+                })?;
 
-fn array_upper(args: &[ArrayRef]) -> DFResult<ArrayRef> {
-    let anyarray = as_list_array(&args[0]).map_err(|_| {
-        plan_datafusion_err!(
-            "argument of array_upper must be an array, actual: {}",
-            args[0].data_type()
-        )
-    })?;
-    let dims = if args.len() == 2 {
-        as_int64_array(&args[1]).ok()
-    } else {
-        None
-    };
-
-    let mut builder = Int64Builder::with_capacity(anyarray.len());
-    for (idx, element) in anyarray.iter().enumerate() {
-        let dim = dims.map_or(1, |dims| {
-            if dims.is_null(idx) {
-                -1
-            } else {
-                dims.value(idx)
-            }
-        });
-
-        match dim.cmp(&1) {
-            Ordering::Less => builder.append_null(),
-            Ordering::Equal => {
-                match element {
-                    None => builder.append_null(),
-                    Some(arr) => {
-                        if arr.len() == 0 {
-                            builder.append_null()
-                        } else {
-                            builder.append_value(arr.len() as i64)
+                match &args[1] {
+                    ColumnarValue::Array(_) => {
+                        plan_err!("second argument of `array_upper` must be a scalar")
+                    }
+                    ColumnarValue::Scalar(ScalarValue::Int64(Some(dimension))) => {
+                        match dimension.cmp(&1) {
+                            Ordering::Less => {
+                                Ok(ColumnarValue::Array(Arc::new(NullArray::new(
+                                    anyarrays.len(),
+                                ))))
+                            }
+                            Ordering::Equal => {
+                                let mut builder = Int64Builder::with_capacity(anyarrays.len());
+                                for anyarray in anyarrays.iter() {
+                                    match anyarray {
+                                        None => builder.append_null(),
+                                        Some(anyarray) => {
+                                            builder.append_value(anyarray.len() as i64)
+                                        }
+                                    }
+                                }
+                                Ok(ColumnarValue::Array(Arc::new(builder.finish())))
+                            }
+                            Ordering::Greater => {
+                                not_impl_err!(
+                                    "argument dimension > 1 is not supported right now, actual: {}",
+                                    dimension
+                                )
+                            }
                         }
+                    }
+                    ColumnarValue::Scalar(scalar) => {
+                        plan_err!(
+                            "second argument of `array_upper` must be an integer, actual: {}",
+                            scalar.data_type()
+                        )
                     }
                 }
             }
-            Ordering::Greater => {
-                return not_impl_err!(
-                    "argument dim > 1 is not supported right now, actual: {}",
-                    dim
-                );
+            ColumnarValue::Scalar(ScalarValue::List(anyarray)) => {
+                match &args[1] {
+                    ColumnarValue::Array(_) => {
+                        plan_err!("second argument of `array_upper` must be a scalar")
+                    }
+                    ColumnarValue::Scalar(ScalarValue::Int64(Some(dimension))) => {
+                        match dimension.cmp(&1) {
+                            Ordering::Less => Ok(ColumnarValue::Scalar(ScalarValue::Null)),
+                            Ordering::Equal => {
+                                Ok(ColumnarValue::Scalar(ScalarValue::Int64(Some(
+                                    anyarray.len() as i64,
+                                ))))
+                            }
+                            Ordering::Greater => {
+                                not_impl_err!(
+                                    "argument dimension > 1 is not supported right now, actual: {}",
+                                    dimension
+                                )
+                            }
+                        }
+                    }
+                    ColumnarValue::Scalar(scalar) => {
+                        plan_err!(
+                            "second argument of `array_upper` must be an integer, actual: {}",
+                            scalar.data_type()
+                        )
+                    }
+                }
+            }
+            ColumnarValue::Scalar(ScalarValue::Null) => {
+                Ok(ColumnarValue::Scalar(ScalarValue::Null))
+            }
+            ColumnarValue::Scalar(scalar) => {
+                plan_err!(
+                    "first argument of `array_upper` must be an array, actual: {}",
+                    scalar.data_type()
+                )
             }
         }
     }
-
-    Ok(Arc::new(builder.finish()))
 }
