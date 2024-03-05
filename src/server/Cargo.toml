@@ -13,12 +13,12 @@ workspace = true
 
 [dependencies]
 async-trait.workspace = true
-chrono = "0.4.31"
+chrono.workspace = true
 dataclod.workspace = true
 datafusion.workspace = true
 futures.workspace = true
 num-traits.workspace = true
-pgwire = "0.19.1"
+pgwire = "0.19.2"
 rand = "0.8.5"
 tokio.workspace = true
 tracing.workspace = true

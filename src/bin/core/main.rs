@@ -1,3 +1,5 @@
+#[cfg(test)]
+use rusky as _;
 use tikv_jemallocator::Jemalloc;
 
 #[global_allocator]
