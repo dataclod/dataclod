@@ -8,7 +8,14 @@ repository = "https://github.com/dataclod/dataclod"
 license = "Unlicense"
 
 [workspace]
-members = ["src/bin", "src/core", "src/datafusion-extra", "src/server"]
+members = [
+    "src/bin",
+    "src/common/exception",
+    "src/common/telemetry",
+    "src/core",
+    "src/datafusion-extra",
+    "src/server",
+]
 resolver = "2"
 
 [workspace.lints.rust]
@@ -54,6 +61,7 @@ used_underscore_binding = "warn"
 
 [workspace.dependencies]
 # workspace dependencies
+common-telemetry = { path = "src/common/telemetry", version = "0.0.2" }
 dataclod = { path = "src/core", version = "0.0.2" }
 datafusion-extra = { path = "src/datafusion-extra", version = "0.0.2" }
 server = { package = "dataclod-server", path = "src/server", version = "0.0.2" }

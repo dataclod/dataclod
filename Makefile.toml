@@ -5,8 +5,9 @@ skip_rust_env_info = true
 skip_crate_env_info = true
 
 [env]
-DATACLOD_PORT = 9973
+DATACLOD_CORE_PORT = 9973
 DATACLOD_PASSWORD = "dataclod"
+DATACLOD_LOG_LEVEL = "DEBUG"
 TOKIO_CONSOLE_BIND = "0.0.0.0:6669"
 IMAGE_TAG = { script = ["git rev-parse --short HEAD"] }
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
@@ -54,7 +55,7 @@ args = ["run", "--bin", "dataclod-core"]
 [tasks.core-console]
 env = { RUSTFLAGS = "--cfg tokio_unstable" }
 command = "cargo"
-args = ["run", "--bin", "dataclod-core", "--features", "tokio-console"]
+args = ["run", "--bin", "dataclod-core", "--features", "console"]
 
 [tasks.fmt]
 command = "cargo"
@@ -137,4 +138,4 @@ args = ["flamegraph", "--bin", "dataclod-core"]
 script = "docker build -t dataclod-core:$IMAGE_TAG -f $CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY/docker/core.Dockerfile $CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY"
 
 [tasks.run-core-image]
-script = "docker run -d -e DATACLOD_PORT=$DATACLOD_PORT -e DATACLOD_PASSWORD=$DATACLOD_PASSWORD -e TOKIO_CONSOLE_BIND=$TOKIO_CONSOLE_BIND -p 9973:9973 -p 6669:6669 --name dataclod-core dataclod-core:$IMAGE_TAG"
+script = "docker run -d -e DATACLOD_CORE_PORT=$DATACLOD_CORE_PORT -e DATACLOD_PASSWORD=$DATACLOD_PASSWORD -e TOKIO_CONSOLE_BIND=$TOKIO_CONSOLE_BIND -p 9973:9973 -p 6669:6669 --name dataclod-core dataclod-core:$IMAGE_TAG"

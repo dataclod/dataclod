@@ -11,10 +11,14 @@ license.workspace = true
 [lints]
 workspace = true
 
+[features]
+console = ["common-telemetry/console"]
+
 [dependencies]
 server.workspace = true
 tikv-jemallocator.workspace = true
 tokio.workspace = true
+common-telemetry.workspace = true
 
 [dev-dependencies]
 rusky = "0.2.1"
