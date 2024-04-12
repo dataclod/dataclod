@@ -71,9 +71,9 @@ anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
 dashmap = "5.5"
-datafusion = { version = "36.0", features = ["serde"] }
+datafusion = { version = "37.0", features = ["serde"] }
 futures = "0.3"
 num-traits = "0.2"
 tikv-jemallocator = "0.5.4"
-tokio = { version = "1.36", features = ["full"] }
+tokio = { version = "1.37", features = ["full"] }
 tracing = "0.1.40"

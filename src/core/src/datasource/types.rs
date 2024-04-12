@@ -208,7 +208,7 @@ pub fn encode_postgres_rows(rows: &[Row], schema: &SchemaRef) -> Result<RecordBa
                 let mut builder = TimestampMicrosecondBuilder::with_capacity(row_len);
                 for row in rows {
                     let value: Option<NaiveDateTime> = row.get(col);
-                    builder.append_option(value.map(|v| v.timestamp_micros()));
+                    builder.append_option(value.map(|v| v.and_utc().timestamp_micros()));
                 }
                 columns.push(Arc::new(builder.finish()));
             }
@@ -334,7 +334,7 @@ pub fn encode_postgres_rows(rows: &[Row], schema: &SchemaRef) -> Result<RecordBa
                             let value: Option<Vec<Option<NaiveDateTime>>> = row.get(col);
                             builder.append_option(value.map(|v| {
                                 v.into_iter()
-                                    .map(|opt| opt.map(|v| v.timestamp_micros()))
+                                    .map(|opt| opt.map(|v| v.and_utc().timestamp_micros()))
                                     .collect::<Vec<_>>()
                             }));
                         }

@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct PgType<'a> {
     pub oid: u32,
     pub typname: &'a str,

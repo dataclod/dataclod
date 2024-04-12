@@ -8,7 +8,6 @@ use datafusion::common::cast::as_list_array;
 use datafusion::common::{
     not_impl_err, plan_datafusion_err, plan_err, Result as DFResult, ScalarValue,
 };
-use datafusion::error::DataFusionError;
 use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
 
 pub fn create_udf() -> ScalarUDF {

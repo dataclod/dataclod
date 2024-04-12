@@ -1,21 +1,23 @@
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 
 pub fn make_ts(val: i64) -> Option<NaiveDateTime> {
-    NaiveDateTime::from_timestamp_opt(val, 0)
+    DateTime::from_timestamp(val, 0).map(|dt| dt.naive_utc())
 }
 
 pub fn make_ts_millis(val: i64) -> Option<NaiveDateTime> {
-    NaiveDateTime::from_timestamp_millis(val)
+    DateTime::from_timestamp_millis(val).map(|dt| dt.naive_utc())
 }
 
 pub fn make_ts_micros(val: i64) -> Option<NaiveDateTime> {
-    NaiveDateTime::from_timestamp_micros(val)
+    let secs = val.div_euclid(1_000_000);
+    let nsecs = val.rem_euclid(1_000_000) as u32 * 1000;
+    DateTime::from_timestamp(secs, nsecs).map(|dt| dt.naive_utc())
 }
 
 pub fn make_ts_nanos(val: i64) -> Option<NaiveDateTime> {
     let secs = val.div_euclid(1_000_000_000);
     let nsecs = val.rem_euclid(1_000_000_000) as u32;
-    NaiveDateTime::from_timestamp_opt(secs, nsecs)
+    DateTime::from_timestamp(secs, nsecs).map(|dt| dt.naive_utc())
 }
 
 pub fn make_date32(val: i32) -> Option<DateTime<Utc>> {
@@ -25,7 +27,7 @@ pub fn make_date32(val: i32) -> Option<DateTime<Utc>> {
 }
 
 pub fn make_date64(val: i64) -> Option<DateTime<Utc>> {
-    NaiveDateTime::from_timestamp_millis(val).map(|dt| Utc.from_utc_datetime(&dt))
+    DateTime::from_timestamp_millis(val)
 }
 
 pub fn make_time32(val: i32) -> Option<NaiveTime> {

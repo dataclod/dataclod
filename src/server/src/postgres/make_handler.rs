@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use dataclod::QueryContext;
 use pgwire::api::auth::{AuthSource, ServerParameterProvider};
-use pgwire::api::store::MemPortalStore;
 use pgwire::api::MakeHandler;
 use tokio::sync::Mutex;
 
@@ -30,7 +29,6 @@ impl MakeHandler for MakePostgresBackend {
     fn make(&self) -> Self::Handler {
         Arc::new(PostgresBackend {
             session_context: self.session_context.clone(),
-            portal_store: Arc::new(MemPortalStore::new()),
             query_parser: self.query_parser.clone(),
         })
     }
