@@ -9,12 +9,12 @@ license = "Unlicense"
 
 [workspace]
 members = [
-    "src/bin",
-    "src/common/exception",
-    "src/common/telemetry",
-    "src/core",
-    "src/datafusion-extra",
-    "src/server",
+  "src/bin",
+  "src/common/exception",
+  "src/common/telemetry",
+  "src/core",
+  "src/datafusion-extra",
+  "src/server",
 ]
 resolver = "2"
 
@@ -61,6 +61,7 @@ used_underscore_binding = "warn"
 
 [workspace.dependencies]
 # workspace dependencies
+common-exception = { path = "src/common/exception", version = "0.0.2" }
 common-telemetry = { path = "src/common/telemetry", version = "0.0.2" }
 dataclod = { path = "src/core", version = "0.0.2" }
 datafusion-extra = { path = "src/datafusion-extra", version = "0.0.2" }
@@ -71,7 +72,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
 dashmap = "5.5"
-datafusion = { version = "37.0", features = ["serde"] }
+datafusion = { version = "37.1", features = ["serde"] }
 futures = "0.3"
 num-traits = "0.2"
 tikv-jemallocator = "0.5.4"

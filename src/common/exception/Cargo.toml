@@ -1,5 +1,5 @@
 [package]
-name = "exception"
+name = "common-exception"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

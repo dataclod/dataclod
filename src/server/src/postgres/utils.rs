@@ -9,9 +9,7 @@ pub fn make_ts_millis(val: i64) -> Option<NaiveDateTime> {
 }
 
 pub fn make_ts_micros(val: i64) -> Option<NaiveDateTime> {
-    let secs = val.div_euclid(1_000_000);
-    let nsecs = val.rem_euclid(1_000_000) as u32 * 1000;
-    DateTime::from_timestamp(secs, nsecs).map(|dt| dt.naive_utc())
+    DateTime::from_timestamp_micros(val).map(|dt| dt.naive_utc())
 }
 
 pub fn make_ts_nanos(val: i64) -> Option<NaiveDateTime> {

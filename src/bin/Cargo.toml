@@ -15,10 +15,10 @@ workspace = true
 console = ["common-telemetry/console"]
 
 [dependencies]
+common-telemetry.workspace = true
 server.workspace = true
 tikv-jemallocator.workspace = true
 tokio.workspace = true
-common-telemetry.workspace = true
 
 [dev-dependencies]
 rusky = "0.2.1"
