@@ -40,20 +40,21 @@ impl TableProvider for PostgresTable {
 
     async fn scan(
         &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
-        _limit: Option<usize>,
+        limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        let stream = Arc::new(PostgresStream {
+        let stream = PostgresStream {
             client: self.client.clone(),
             schema: self.schema(),
             query: self.query.clone(),
-        });
+        };
 
         Ok(Arc::new(StreamingTableExec::try_new(
             self.schema(),
-            vec![stream],
+            vec![Arc::new(stream)],
             projection,
-            None,
+            [],
             false,
+            limit,
         )?))
     }
 }
