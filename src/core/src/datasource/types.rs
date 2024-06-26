@@ -137,7 +137,8 @@ pub fn encode_postgres_rows(rows: &[Row], schema: &SchemaRef) -> Result<RecordBa
     for col in 0..col_len {
         match schema.field(col).data_type() {
             DataType::Null => {
-                let mut builder = NullBuilder::with_capacity(row_len);
+                let mut builder = NullBuilder::new();
+                builder.append_nulls(row_len);
                 columns.push(Arc::new(builder.finish()));
             }
             DataType::Boolean => {

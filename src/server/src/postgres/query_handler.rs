@@ -7,26 +7,29 @@ use pgwire::api::portal::{Format, Portal};
 use pgwire::api::query::{ExtendedQueryHandler, SimpleQueryHandler};
 use pgwire::api::results::{DescribePortalResponse, DescribeStatementResponse, Response};
 use pgwire::api::stmt::StoredStatement;
-use pgwire::api::ClientInfo;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 use tracing::debug;
 
 use super::query_parser::DataClodQueryParser;
 use super::types::{encode_dataframe, encode_parameters, encode_schema};
 
-pub struct PostgresBackend {
+pub struct SimplePostgresBackend {
     pub session_context: Arc<QueryContext>,
-    pub query_parser: Arc<DataClodQueryParser>,
+}
+
+impl SimplePostgresBackend {
+    pub fn new() -> Self {
+        Self {
+            session_context: Arc::new(QueryContext::new()),
+        }
+    }
 }
 
 #[async_trait]
-impl SimpleQueryHandler for PostgresBackend {
+impl SimpleQueryHandler for SimplePostgresBackend {
     async fn do_query<'a, C>(
         &self, _client: &mut C, query: &'a str,
-    ) -> PgWireResult<Vec<Response<'a>>>
-    where
-        C: ClientInfo + Unpin + Send + Sync,
-    {
+    ) -> PgWireResult<Vec<Response<'a>>> {
         debug!("simple query: {}", query);
 
         let df = self
@@ -40,8 +43,22 @@ impl SimpleQueryHandler for PostgresBackend {
     }
 }
 
+pub struct ExtendedPostgresBackend {
+    pub session_context: Arc<QueryContext>,
+    pub query_parser: Arc<DataClodQueryParser>,
+}
+
+impl ExtendedPostgresBackend {
+    pub fn new() -> Self {
+        Self {
+            session_context: Arc::new(QueryContext::new()),
+            query_parser: Arc::new(DataClodQueryParser {}),
+        }
+    }
+}
+
 #[async_trait]
-impl ExtendedQueryHandler for PostgresBackend {
+impl ExtendedQueryHandler for ExtendedPostgresBackend {
     type QueryParser = DataClodQueryParser;
     type Statement = Statement;
 
@@ -51,10 +68,7 @@ impl ExtendedQueryHandler for PostgresBackend {
 
     async fn do_query<'a, C>(
         &self, _client: &mut C, portal: &'a Portal<Self::Statement>, _max_rows: usize,
-    ) -> PgWireResult<Response<'a>>
-    where
-        C: ClientInfo + Unpin + Send + Sync,
-    {
+    ) -> PgWireResult<Response<'a>> {
         debug!("extend query: {}", portal.statement.statement);
 
         let df = self
@@ -79,10 +93,7 @@ impl ExtendedQueryHandler for PostgresBackend {
 
     async fn do_describe_statement<C>(
         &self, _client: &mut C, stmt: &StoredStatement<Self::Statement>,
-    ) -> PgWireResult<DescribeStatementResponse>
-    where
-        C: ClientInfo + Unpin + Send + Sync,
-    {
+    ) -> PgWireResult<DescribeStatementResponse> {
         debug!("describe statement: {}", stmt.statement);
 
         let plan = self
@@ -106,10 +117,7 @@ impl ExtendedQueryHandler for PostgresBackend {
 
     async fn do_describe_portal<C>(
         &self, _client: &mut C, portal: &Portal<Self::Statement>,
-    ) -> PgWireResult<DescribePortalResponse>
-    where
-        C: ClientInfo + Unpin + Send + Sync,
-    {
+    ) -> PgWireResult<DescribePortalResponse> {
         debug!("describe portal: {}", portal.statement.statement);
 
         let plan = self

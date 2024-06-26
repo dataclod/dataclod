@@ -1,15 +1,21 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::sink::{Sink, SinkExt};
-use pgwire::api::auth::{AuthSource, LoginInfo, ServerParameterProvider, StartupHandler};
+use pgwire::api::auth::md5pass::hash_md5_password;
+use pgwire::api::auth::{AuthSource, LoginInfo, Password, ServerParameterProvider, StartupHandler};
 use pgwire::api::{ClientInfo, PgWireConnectionState};
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 use pgwire::messages::response::ErrorResponse;
 use pgwire::messages::startup::Authentication;
 use pgwire::messages::{PgWireBackendMessage, PgWireFrontendMessage};
+use rand::Rng;
 use tokio::sync::Mutex;
+
+const PG_VERSION: &str = "10.0";
+const DEFAULT_DATACLOD_PASSWORD: &str = "dataclod";
 
 pub struct DataClodStartupHandler<A, P> {
     pub auth_source: Arc<A>,
@@ -76,5 +82,32 @@ impl<A: AuthSource, P: ServerParameterProvider> StartupHandler for DataClodStart
             _ => {}
         }
         Ok(())
+    }
+}
+
+pub struct DataClodParameterProvider;
+
+impl ServerParameterProvider for DataClodParameterProvider {
+    fn server_parameters<C>(&self, _client: &C) -> Option<HashMap<String, String>> {
+        Some(HashMap::from([
+            ("server_version".to_owned(), PG_VERSION.to_owned()),
+            ("server_encoding".to_owned(), "UTF8".to_owned()),
+            ("client_encoding".to_owned(), "UTF8".to_owned()),
+            ("DateStyle".to_owned(), "ISO YMD".to_owned()),
+            ("integer_datetimes".to_owned(), "on".to_owned()),
+        ]))
+    }
+}
+
+pub struct DataClodAuthSource;
+
+#[async_trait]
+impl AuthSource for DataClodAuthSource {
+    async fn get_password(&self, login: &LoginInfo) -> PgWireResult<Password> {
+        let salt = rand::thread_rng().gen::<[u8; 4]>().to_vec();
+        let password =
+            std::env::var("DATACLOD_PASSWORD").unwrap_or(String::from(DEFAULT_DATACLOD_PASSWORD));
+        let hash_password = hash_md5_password(login.user().unwrap_or_default(), &password, &salt);
+        Ok(Password::new(Some(salt), hash_password.as_bytes().to_vec()))
     }
 }
