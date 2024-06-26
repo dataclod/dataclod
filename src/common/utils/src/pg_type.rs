@@ -29,6 +29,15 @@ macro_rules! define_pg_types {
             $($NAME = $OID,)*
         }
 
+        impl PgTypeId {
+            pub fn from_oid(oid: u32) -> Option<Self> {
+                match oid {
+                    $($OID => Some(Self::$NAME),)*
+                    _ => None,
+                }
+            }
+        }
+
         impl PgType<'_> {
             pub fn get_all() -> Vec<&'static PgType<'static>> {
                 vec![

@@ -8,7 +8,7 @@ use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::{plan_err, ScalarValue};
 use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::datasource::TableProvider;
-use datafusion::error::Result;
+use datafusion::error::Result as DFResult;
 use datafusion::execution::context::{ExecutionProps, SessionState};
 use datafusion::logical_expr::{Expr, TableType};
 use datafusion::optimizer::simplify_expressions::{ExprSimplifier, SimplifyContext};
@@ -18,7 +18,7 @@ use datafusion::physical_plan::ExecutionPlan;
 pub struct GenerateSeriesUDTF;
 
 impl TableFunctionImpl for GenerateSeriesUDTF {
-    fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {
+    fn call(&self, exprs: &[Expr]) -> DFResult<Arc<dyn TableProvider>> {
         if exprs.len() < 2 || exprs.len() > 3 {
             return plan_err!("generate_series takes 2 or 3 arguments");
         }
@@ -72,7 +72,7 @@ impl TableProvider for GenerateSeriesTable<i64> {
     async fn scan(
         &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
         _limit: Option<usize>,
-    ) -> Result<Arc<dyn ExecutionPlan>> {
+    ) -> DFResult<Arc<dyn ExecutionPlan>> {
         let schema = self.schema();
         let array: Int64Array = (self.start..=self.stop)
             .step_by(self.step as usize)
@@ -94,7 +94,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_generate_series() -> Result<()> {
+    async fn test_generate_series() -> DFResult<()> {
         let ctx = SessionContext::new();
 
         ctx.register_udtf("generate_series", Arc::new(GenerateSeriesUDTF {}));

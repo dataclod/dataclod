@@ -721,6 +721,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-utils"
+version = "0.0.2"
+
+[[package]]
 name = "console-api"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1046,6 +1050,7 @@ version = "0.0.2"
 dependencies = [
  "anyhow",
  "async-trait",
+ "common-utils",
  "datafusion",
  "tokio",
 ]

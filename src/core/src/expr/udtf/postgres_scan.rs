@@ -4,7 +4,7 @@ use datafusion::arrow::datatypes::{Field, Schema};
 use datafusion::common::{plan_err, DataFusionError, ScalarValue};
 use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::datasource::TableProvider;
-use datafusion::error::Result;
+use datafusion::error::Result as DFResult;
 use datafusion::logical_expr::Expr;
 use tokio::runtime::Handle;
 use tokio_postgres::NoTls;
@@ -15,7 +15,7 @@ use crate::datasource::{postgres_to_arrow, PostgresTable};
 pub struct PostgresScanUDTF;
 
 impl TableFunctionImpl for PostgresScanUDTF {
-    fn call(&self, exprs: &[Expr]) -> Result<Arc<dyn TableProvider>> {
+    fn call(&self, exprs: &[Expr]) -> DFResult<Arc<dyn TableProvider>> {
         if exprs.len() != 3 {
             return plan_err!("postgres_scan takes 3 arguments");
         }

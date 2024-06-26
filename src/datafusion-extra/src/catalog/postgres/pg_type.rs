@@ -2,7 +2,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use datafusion::arrow::array::{ArrayRef, StringBuilder, UInt32Builder};
+use common_utils::PgType;
+use datafusion::arrow::array::{ArrayRef, Int64Builder, StringBuilder, UInt32Builder};
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::common::Result as DFResult;
@@ -12,22 +13,30 @@ use datafusion::logical_expr::{Expr, TableType};
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
 
-use super::utils::PgType;
-
 struct PgTypeBuilder {
     oid: UInt32Builder,
     typname: StringBuilder,
     typnamespace: UInt32Builder,
+    typcategory: StringBuilder,
+    typrelid: UInt32Builder,
+    typelem: UInt32Builder,
+    typbasetype: UInt32Builder,
+    typtypmod: Int64Builder,
 }
 
 impl PgTypeBuilder {
     fn new() -> Self {
-        let capacity = 100;
+        let capacity = 64;
 
         Self {
             oid: UInt32Builder::with_capacity(capacity),
             typname: StringBuilder::with_capacity(capacity, 0),
             typnamespace: UInt32Builder::with_capacity(capacity),
+            typcategory: StringBuilder::with_capacity(capacity, 0),
+            typrelid: UInt32Builder::with_capacity(capacity),
+            typelem: UInt32Builder::with_capacity(capacity),
+            typbasetype: UInt32Builder::with_capacity(capacity),
+            typtypmod: Int64Builder::with_capacity(capacity),
         }
     }
 
@@ -35,21 +44,29 @@ impl PgTypeBuilder {
         self.oid.append_value(typ.oid);
         self.typname.append_value(typ.typname);
         self.typnamespace.append_value(typ.typnamespace);
+        self.typcategory.append_value(typ.typcategory);
+        self.typrelid.append_value(typ.typrelid);
+        self.typelem.append_value(typ.typelem);
+        self.typbasetype.append_value(typ.typbasetype);
+        self.typtypmod.append_value(-1);
     }
 
-    fn finish(mut self) -> Arc<[ArrayRef]> {
-        let columns: Vec<ArrayRef> = vec![
+    fn finish(mut self) -> Arc<Vec<ArrayRef>> {
+        Arc::new(vec![
             Arc::new(self.oid.finish()),
             Arc::new(self.typname.finish()),
             Arc::new(self.typnamespace.finish()),
-        ];
-
-        columns.into()
+            Arc::new(self.typcategory.finish()),
+            Arc::new(self.typrelid.finish()),
+            Arc::new(self.typelem.finish()),
+            Arc::new(self.typbasetype.finish()),
+            Arc::new(self.typtypmod.finish()),
+        ])
     }
 }
 
 pub struct PgTypeTable {
-    data: Arc<[ArrayRef]>,
+    data: Arc<Vec<ArrayRef>>,
 }
 
 impl PgTypeTable {
@@ -87,6 +104,11 @@ impl TableProvider for PgTypeTable {
             Field::new("oid", DataType::UInt32, false),
             Field::new("typname", DataType::Utf8, false),
             Field::new("typnamespace", DataType::UInt32, false),
+            Field::new("typcategory", DataType::Utf8, false),
+            Field::new("typrelid", DataType::UInt32, false),
+            Field::new("typelem", DataType::UInt32, false),
+            Field::new("typbasetype", DataType::UInt32, false),
+            Field::new("typtypmod", DataType::Int64, false),
         ]))
     }
 

@@ -12,67 +12,52 @@ use datafusion::logical_expr::Expr;
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
 
-struct PgNamespace {
+struct PgClass<'a> {
     oid: u32,
-    nspname: &'static str,
+    relkind: &'a str,
 }
 
-struct PgCatalogNamespaceBuilder {
+struct PgCatalogClassBuilder {
     oid: UInt32Builder,
-    nspname: StringBuilder,
+    relkind: StringBuilder,
 }
 
-impl PgCatalogNamespaceBuilder {
+impl PgCatalogClassBuilder {
     fn new() -> Self {
         let capacity = 64;
 
         Self {
             oid: UInt32Builder::with_capacity(capacity),
-            nspname: StringBuilder::with_capacity(capacity, 0),
+            relkind: StringBuilder::with_capacity(capacity, 0),
         }
     }
 
-    fn add_row(&mut self, ns: &PgNamespace) {
-        self.oid.append_value(ns.oid);
-        self.nspname.append_value(ns.nspname);
+    fn add_class(&mut self, class: &PgClass) {
+        self.oid.append_value(class.oid);
+        self.relkind.append_value(class.relkind);
     }
 
-    fn finish(mut self) -> Arc<Vec<ArrayRef>> {
-        Arc::new(vec![
-            Arc::new(self.oid.finish()),
-            Arc::new(self.nspname.finish()),
-        ])
+    fn finish(mut self) -> Vec<ArrayRef> {
+        vec![Arc::new(self.oid.finish()), Arc::new(self.relkind.finish())]
     }
 }
 
-pub struct PgNamespaceTable {
+pub struct PgClassTable {
     data: Arc<Vec<ArrayRef>>,
 }
 
-impl PgNamespaceTable {
+impl PgClassTable {
     pub fn new() -> Self {
-        let mut builder = PgCatalogNamespaceBuilder::new();
-        builder.add_row(&PgNamespace {
-            oid: 11,
-            nspname: "pg_catalog",
-        });
-        builder.add_row(&PgNamespace {
-            oid: 2200,
-            nspname: "public",
-        });
-        builder.add_row(&PgNamespace {
-            oid: 13676,
-            nspname: "information_schema",
-        });
+        let builder = PgCatalogClassBuilder::new();
 
         Self {
-            data: builder.finish(),
+            data: Arc::new(builder.finish()),
         }
     }
 }
 
 #[async_trait]
-impl TableProvider for PgNamespaceTable {
+impl TableProvider for PgClassTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -84,7 +69,7 @@ impl TableProvider for PgNamespaceTable {
     fn schema(&self) -> SchemaRef {
         Arc::new(Schema::new(vec![
             Field::new("oid", DataType::UInt32, false),
-            Field::new("nspname", DataType::Utf8, false),
+            Field::new("relkind", DataType::Utf8, false),
         ]))
     }
 

@@ -106,7 +106,7 @@ impl AuthSource for DataClodAuthSource {
     async fn get_password(&self, login: &LoginInfo) -> PgWireResult<Password> {
         let salt = rand::thread_rng().gen::<[u8; 4]>().to_vec();
         let password =
-            std::env::var("DATACLOD_PASSWORD").unwrap_or(String::from(DEFAULT_DATACLOD_PASSWORD));
+            std::env::var("DATACLOD_PASSWORD").unwrap_or(DEFAULT_DATACLOD_PASSWORD.to_owned());
         let hash_password = hash_md5_password(login.user().unwrap_or_default(), &password, &salt);
         Ok(Password::new(Some(salt), hash_password.as_bytes().to_vec()))
     }

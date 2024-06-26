@@ -5,74 +5,52 @@ use async_trait::async_trait;
 use datafusion::arrow::array::{ArrayRef, StringBuilder, UInt32Builder};
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::common::Result as DFResult;
 use datafusion::datasource::{TableProvider, TableType};
+use datafusion::error::Result as DFResult;
 use datafusion::execution::context::SessionState;
 use datafusion::logical_expr::Expr;
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
 
-struct PgNamespace {
-    oid: u32,
-    nspname: &'static str,
+struct PgCatalogDescriptionBuilder {
+    objoid: UInt32Builder,
+    description: StringBuilder,
 }
 
-struct PgCatalogNamespaceBuilder {
-    oid: UInt32Builder,
-    nspname: StringBuilder,
-}
-
-impl PgCatalogNamespaceBuilder {
+impl PgCatalogDescriptionBuilder {
     fn new() -> Self {
         let capacity = 64;
 
         Self {
-            oid: UInt32Builder::with_capacity(capacity),
-            nspname: StringBuilder::with_capacity(capacity, 0),
+            objoid: UInt32Builder::with_capacity(capacity),
+            description: StringBuilder::with_capacity(capacity, 0),
         }
     }
 
-    fn add_row(&mut self, ns: &PgNamespace) {
-        self.oid.append_value(ns.oid);
-        self.nspname.append_value(ns.nspname);
-    }
-
-    fn finish(mut self) -> Arc<Vec<ArrayRef>> {
-        Arc::new(vec![
-            Arc::new(self.oid.finish()),
-            Arc::new(self.nspname.finish()),
-        ])
+    fn finish(mut self) -> Vec<ArrayRef> {
+        vec![
+            Arc::new(self.objoid.finish()),
+            Arc::new(self.description.finish()),
+        ]
     }
 }
 
-pub struct PgNamespaceTable {
+pub struct PgDescriptionTable {
     data: Arc<Vec<ArrayRef>>,
 }
 
-impl PgNamespaceTable {
+impl PgDescriptionTable {
     pub fn new() -> Self {
-        let mut builder = PgCatalogNamespaceBuilder::new();
-        builder.add_row(&PgNamespace {
-            oid: 11,
-            nspname: "pg_catalog",
-        });
-        builder.add_row(&PgNamespace {
-            oid: 2200,
-            nspname: "public",
-        });
-        builder.add_row(&PgNamespace {
-            oid: 13676,
-            nspname: "information_schema",
-        });
+        let builder = PgCatalogDescriptionBuilder::new();
 
         Self {
-            data: builder.finish(),
+            data: Arc::new(builder.finish()),
         }
     }
 }
 
 #[async_trait]
-impl TableProvider for PgNamespaceTable {
+impl TableProvider for PgDescriptionTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -83,8 +61,8 @@ impl TableProvider for PgNamespaceTable {
 
     fn schema(&self) -> SchemaRef {
         Arc::new(Schema::new(vec![
-            Field::new("oid", DataType::UInt32, false),
-            Field::new("nspname", DataType::Utf8, false),
+            Field::new("objoid", DataType::UInt32, false),
+            Field::new("description", DataType::Utf8, false),
         ]))
     }
 

@@ -1,18 +1,26 @@
+mod pg_class;
+mod pg_description;
 mod pg_namespace;
 mod pg_type;
-mod utils;
 
 use std::sync::Arc;
 
 use anyhow::Result;
 use datafusion::catalog::schema::{MemorySchemaProvider, SchemaProvider};
 use datafusion::execution::context::SessionContext;
+use pg_class::PgClassTable;
+use pg_description::PgDescriptionTable;
 use pg_namespace::PgNamespaceTable;
 use pg_type::PgTypeTable;
 
 pub fn with_pg_catalog(ctx: &SessionContext) -> Result<()> {
     let pg_catalog = MemorySchemaProvider::new();
     pg_catalog.register_table("pg_type".to_owned(), Arc::new(PgTypeTable::new()))?;
+    pg_catalog.register_table("pg_class".to_owned(), Arc::new(PgClassTable::new()))?;
+    pg_catalog.register_table(
+        "pg_description".to_owned(),
+        Arc::new(PgDescriptionTable::new()),
+    )?;
 
     ctx.register_table("public.pg_namespace", Arc::new(PgNamespaceTable::new()))?;
 
