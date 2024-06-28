@@ -37,16 +37,13 @@ impl PgCatalogNamespaceBuilder {
         self.nspname.append_value(ns.nspname);
     }
 
-    fn finish(mut self) -> Arc<Vec<ArrayRef>> {
-        Arc::new(vec![
-            Arc::new(self.oid.finish()),
-            Arc::new(self.nspname.finish()),
-        ])
+    fn finish(&mut self) -> Vec<ArrayRef> {
+        vec![Arc::new(self.oid.finish()), Arc::new(self.nspname.finish())]
     }
 }
 
 pub struct PgNamespaceTable {
-    data: Arc<Vec<ArrayRef>>,
+    data: Vec<ArrayRef>,
 }
 
 impl PgNamespaceTable {
@@ -92,7 +89,7 @@ impl TableProvider for PgNamespaceTable {
         &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
         _limit: Option<usize>,
     ) -> DFResult<Arc<dyn ExecutionPlan>> {
-        let batch = RecordBatch::try_new(self.schema(), self.data.to_vec())?;
+        let batch = RecordBatch::try_new(self.schema(), self.data.clone())?;
 
         Ok(Arc::new(MemoryExec::try_new(
             &[vec![batch]],

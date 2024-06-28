@@ -51,8 +51,8 @@ impl PgTypeBuilder {
         self.typtypmod.append_value(-1);
     }
 
-    fn finish(mut self) -> Arc<Vec<ArrayRef>> {
-        Arc::new(vec![
+    fn finish(&mut self) -> Vec<ArrayRef> {
+        vec![
             Arc::new(self.oid.finish()),
             Arc::new(self.typname.finish()),
             Arc::new(self.typnamespace.finish()),
@@ -61,12 +61,12 @@ impl PgTypeBuilder {
             Arc::new(self.typelem.finish()),
             Arc::new(self.typbasetype.finish()),
             Arc::new(self.typtypmod.finish()),
-        ])
+        ]
     }
 }
 
 pub struct PgTypeTable {
-    data: Arc<Vec<ArrayRef>>,
+    data: Vec<ArrayRef>,
 }
 
 impl PgTypeTable {
@@ -116,7 +116,7 @@ impl TableProvider for PgTypeTable {
         &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
         _limit: Option<usize>,
     ) -> DFResult<Arc<dyn ExecutionPlan>> {
-        let batch = RecordBatch::try_new(self.schema(), self.data.to_vec())?;
+        let batch = RecordBatch::try_new(self.schema(), self.data.clone())?;
 
         Ok(Arc::new(MemoryExec::try_new(
             &[vec![batch]],

@@ -12,7 +12,7 @@ use datafusion::logical_expr::Expr;
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
 
-struct PgClass<'a> {
+struct _PgClass<'a> {
     oid: u32,
     relkind: &'a str,
 }
@@ -32,26 +32,26 @@ impl PgCatalogClassBuilder {
         }
     }
 
-    fn add_class(&mut self, class: &PgClass) {
+    fn _add_class(&mut self, class: &_PgClass) {
         self.oid.append_value(class.oid);
         self.relkind.append_value(class.relkind);
     }
 
-    fn finish(mut self) -> Vec<ArrayRef> {
+    fn finish(&mut self) -> Vec<ArrayRef> {
         vec![Arc::new(self.oid.finish()), Arc::new(self.relkind.finish())]
     }
 }
 
 pub struct PgClassTable {
-    data: Arc<Vec<ArrayRef>>,
+    data: Vec<ArrayRef>,
 }
 
 impl PgClassTable {
     pub fn new() -> Self {
-        let builder = PgCatalogClassBuilder::new();
+        let mut builder = PgCatalogClassBuilder::new();
 
         Self {
-            data: Arc::new(builder.finish()),
+            data: builder.finish(),
         }
     }
 }
@@ -77,7 +77,7 @@ impl TableProvider for PgClassTable {
         &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
         _limit: Option<usize>,
     ) -> DFResult<Arc<dyn ExecutionPlan>> {
-        let batch = RecordBatch::try_new(self.schema(), self.data.to_vec())?;
+        let batch = RecordBatch::try_new(self.schema(), self.data.clone())?;
 
         Ok(Arc::new(MemoryExec::try_new(
             &[vec![batch]],

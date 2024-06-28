@@ -27,7 +27,7 @@ impl PgCatalogDescriptionBuilder {
         }
     }
 
-    fn finish(mut self) -> Vec<ArrayRef> {
+    fn finish(&mut self) -> Vec<ArrayRef> {
         vec![
             Arc::new(self.objoid.finish()),
             Arc::new(self.description.finish()),
@@ -36,15 +36,15 @@ impl PgCatalogDescriptionBuilder {
 }
 
 pub struct PgDescriptionTable {
-    data: Arc<Vec<ArrayRef>>,
+    data: Vec<ArrayRef>,
 }
 
 impl PgDescriptionTable {
     pub fn new() -> Self {
-        let builder = PgCatalogDescriptionBuilder::new();
+        let mut builder = PgCatalogDescriptionBuilder::new();
 
         Self {
-            data: Arc::new(builder.finish()),
+            data: builder.finish(),
         }
     }
 }
@@ -70,7 +70,7 @@ impl TableProvider for PgDescriptionTable {
         &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
         _limit: Option<usize>,
     ) -> DFResult<Arc<dyn ExecutionPlan>> {
-        let batch = RecordBatch::try_new(self.schema(), self.data.to_vec())?;
+        let batch = RecordBatch::try_new(self.schema(), self.data.clone())?;
 
         Ok(Arc::new(MemoryExec::try_new(
             &[vec![batch]],
