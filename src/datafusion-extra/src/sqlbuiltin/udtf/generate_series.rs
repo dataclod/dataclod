@@ -97,7 +97,7 @@ mod tests {
     async fn test_generate_series() -> DFResult<()> {
         let ctx = SessionContext::new();
 
-        ctx.register_udtf("generate_series", Arc::new(GenerateSeriesUDTF {}));
+        ctx.register_udtf("generate_series", Arc::new(GenerateSeriesUDTF));
 
         let df = ctx.sql("SELECT * FROM generate_series(1, 4)").await?;
         let batches = df.collect().await?;

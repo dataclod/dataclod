@@ -3,9 +3,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use datafusion::arrow::datatypes::SchemaRef;
-use datafusion::common::{exec_datafusion_err, Result};
+use datafusion::common::{exec_datafusion_err, not_impl_datafusion_err, Result};
 use datafusion::datasource::TableProvider;
-use datafusion::error::DataFusionError;
 use datafusion::execution::context::SessionState;
 use datafusion::execution::TaskContext;
 use datafusion::logical_expr::{Expr, TableType};
@@ -93,7 +92,7 @@ impl PartitionStream for PostgresStream {
             {
                 tx.send(
                     encode_postgres_rows(&rows, &schema)
-                        .map_err(|e| DataFusionError::NotImplemented(e.to_string())),
+                        .map_err(|e| not_impl_datafusion_err!("{}", e)),
                 )
                 .await
                 .map_err(|e| {

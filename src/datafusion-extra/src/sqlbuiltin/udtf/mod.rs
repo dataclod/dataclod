@@ -7,6 +7,6 @@ use datafusion::execution::context::SessionContext;
 pub fn register_udtf(ctx: &SessionContext) {
     ctx.register_udtf(
         "generate_series",
-        Arc::new(generate_series::GenerateSeriesUDTF {}),
+        Arc::new(generate_series::GenerateSeriesUDTF),
     );
 }

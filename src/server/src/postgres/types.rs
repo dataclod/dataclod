@@ -97,7 +97,7 @@ pub fn encode_schema(schema: &DFSchema, format: &Format) -> PgWireResult<Vec<Fie
         .map(|(idx, field)| {
             let pg_type = into_pg_type(field.data_type())?;
             Ok(FieldInfo::new(
-                field.name().to_string(),
+                field.name().to_owned(),
                 None,
                 None,
                 pg_type,

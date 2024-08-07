@@ -52,7 +52,7 @@ impl ExtendedPostgresBackend {
     pub fn new() -> Self {
         Self {
             session_context: Arc::new(QueryContext::new()),
-            query_parser: Arc::new(DataClodQueryParser {}),
+            query_parser: Arc::new(DataClodQueryParser),
         }
     }
 }

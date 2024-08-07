@@ -28,13 +28,13 @@ impl PgWireHandlerFactory for PostgresBackendFactory {
 
     fn startup_handler(&self) -> Arc<Self::StartupHandler> {
         Arc::new(DataClodStartupHandler {
-            auth_source: Arc::new(DataClodAuthSource {}),
-            parameter_provider: Arc::new(DataClodParameterProvider {}),
+            auth_source: Arc::new(DataClodAuthSource),
+            parameter_provider: Arc::new(DataClodParameterProvider),
             cached_password: Mutex::new(vec![]),
         })
     }
 
     fn copy_handler(&self) -> Arc<Self::CopyHandler> {
-        Arc::new(NoopCopyHandler {})
+        Arc::new(NoopCopyHandler)
     }
 }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use datafusion::arrow::datatypes::{Field, Schema};
-use datafusion::common::{plan_err, DataFusionError, ScalarValue};
+use datafusion::common::{exec_datafusion_err, not_impl_datafusion_err, plan_err, ScalarValue};
 use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result as DFResult;
@@ -16,15 +16,11 @@ pub struct PostgresScanUDTF;
 
 impl TableFunctionImpl for PostgresScanUDTF {
     fn call(&self, exprs: &[Expr]) -> DFResult<Arc<dyn TableProvider>> {
-        if exprs.len() != 3 {
+        if exprs.len() < 3 {
             return plan_err!("postgres_scan takes 3 arguments");
         }
 
-        let dsn = &exprs[0];
-        let db = &exprs[1];
-        let table = &exprs[2];
-
-        match (dsn, db, table) {
+        match (&exprs[0], &exprs[1], &exprs[2]) {
             (
                 Expr::Literal(ScalarValue::Utf8(Some(dsn))),
                 Expr::Literal(ScalarValue::Utf8(Some(db))),
@@ -44,13 +40,13 @@ impl TableFunctionImpl for PostgresScanUDTF {
                         Ok::<_, tokio_postgres::Error>((client, stmt))
                     })
                 })
-                .map_err(|e| DataFusionError::Execution(e.to_string()))?;
+                .map_err(|e| exec_datafusion_err!("{}", e))?;
 
                 let columns = stmt.columns();
                 let mut fields = Vec::with_capacity(columns.len());
                 for column in columns {
                     let filed_type = postgres_to_arrow(column.type_())
-                        .map_err(|e| DataFusionError::NotImplemented(e.to_string()))?;
+                        .map_err(|e| not_impl_datafusion_err!("{}", e))?;
                     let field = Field::new(column.name(), filed_type, true);
                     fields.push(field);
                 }
