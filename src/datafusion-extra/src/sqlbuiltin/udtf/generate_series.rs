@@ -5,11 +5,12 @@ use async_trait::async_trait;
 use datafusion::arrow::array::Int64Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::catalog::Session;
 use datafusion::common::{plan_err, ScalarValue};
 use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result as DFResult;
-use datafusion::execution::context::{ExecutionProps, SessionState};
+use datafusion::execution::context::ExecutionProps;
 use datafusion::logical_expr::{Expr, TableType};
 use datafusion::optimizer::simplify_expressions::{ExprSimplifier, SimplifyContext};
 use datafusion::physical_plan::memory::MemoryExec;
@@ -70,7 +71,7 @@ impl TableProvider for GenerateSeriesTable<i64> {
     }
 
     async fn scan(
-        &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
+        &self, _state: &dyn Session, projection: Option<&Vec<usize>>, _filters: &[Expr],
         _limit: Option<usize>,
     ) -> DFResult<Arc<dyn ExecutionPlan>> {
         let schema = self.schema();

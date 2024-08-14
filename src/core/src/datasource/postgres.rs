@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use datafusion::arrow::datatypes::SchemaRef;
+use datafusion::catalog::Session;
 use datafusion::common::{exec_datafusion_err, not_impl_datafusion_err, Result};
 use datafusion::datasource::TableProvider;
-use datafusion::execution::context::SessionState;
 use datafusion::execution::TaskContext;
 use datafusion::logical_expr::{Expr, TableType};
 use datafusion::physical_plan::stream::RecordBatchReceiverStreamBuilder;
@@ -38,7 +38,7 @@ impl TableProvider for PostgresTable {
     }
 
     async fn scan(
-        &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
+        &self, _state: &dyn Session, projection: Option<&Vec<usize>>, _filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         let stream = PostgresStream {

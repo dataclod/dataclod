@@ -6,9 +6,9 @@ use common_utils::PgType;
 use datafusion::arrow::array::{ArrayRef, Int64Builder, StringBuilder, UInt32Builder};
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::catalog::Session;
 use datafusion::common::Result as DFResult;
 use datafusion::datasource::TableProvider;
-use datafusion::execution::context::SessionState;
 use datafusion::logical_expr::{Expr, TableType};
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
@@ -113,7 +113,7 @@ impl TableProvider for PgTypeTable {
     }
 
     async fn scan(
-        &self, _state: &SessionState, projection: Option<&Vec<usize>>, _filters: &[Expr],
+        &self, _state: &dyn Session, projection: Option<&Vec<usize>>, _filters: &[Expr],
         _limit: Option<usize>,
     ) -> DFResult<Arc<dyn ExecutionPlan>> {
         let batch = RecordBatch::try_new(self.schema(), self.data.clone())?;
