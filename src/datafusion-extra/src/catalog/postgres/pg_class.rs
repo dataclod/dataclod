@@ -63,7 +63,7 @@ impl TableProvider for PgClassTable {
     }
 
     fn table_type(&self) -> TableType {
-        TableType::View
+        TableType::Base
     }
 
     fn schema(&self) -> SchemaRef {
