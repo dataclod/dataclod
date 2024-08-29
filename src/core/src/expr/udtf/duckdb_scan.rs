@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use datafusion::common::{exec_datafusion_err, plan_err, ScalarValue};
@@ -7,34 +6,28 @@ use datafusion::datasource::TableProvider;
 use datafusion::error::Result as DFResult;
 use datafusion::logical_expr::Expr;
 use datafusion::sql::TableReference;
-use datafusion_table_providers::postgres::PostgresTableFactory;
-use datafusion_table_providers::sql::db_connection_pool::postgrespool::PostgresConnectionPool;
-use datafusion_table_providers::util::secrets::to_secret_map;
+use datafusion_table_providers::duckdb::DuckDBTableFactory;
+use datafusion_table_providers::sql::db_connection_pool::duckdbpool::DuckDbConnectionPool;
+use duckdb::AccessMode;
 use tokio::runtime::Handle;
 
-pub struct PostgresScanUDTF;
+pub struct DuckDBScanUDTF;
 
-impl TableFunctionImpl for PostgresScanUDTF {
+impl TableFunctionImpl for DuckDBScanUDTF {
     fn call(&self, exprs: &[Expr]) -> DFResult<Arc<dyn TableProvider>> {
         if exprs.len() < 3 {
-            return plan_err!("postgres_scan takes 3 arguments");
+            return plan_err!("duckdb_scan takes 3 arguments");
         }
 
         match (&exprs[0], &exprs[1], &exprs[2]) {
             (
-                Expr::Literal(ScalarValue::Utf8(Some(dsn))),
+                Expr::Literal(ScalarValue::Utf8(Some(db_path))),
                 Expr::Literal(ScalarValue::Utf8(Some(db))),
                 Expr::Literal(ScalarValue::Utf8(Some(table))),
             ) => {
-                let params = to_secret_map(HashMap::from([(
-                    "connection_string".to_owned(),
-                    dsn.to_owned(),
-                )]));
-                let pool = tokio::task::block_in_place(|| {
-                    Handle::current().block_on(async { PostgresConnectionPool::new(params).await })
-                })
-                .map_err(|e| exec_datafusion_err!("{}", e))?;
-                let table_factory = PostgresTableFactory::new(Arc::new(pool));
+                let pool = DuckDbConnectionPool::new_file(db_path, &AccessMode::ReadOnly)
+                    .map_err(|e| exec_datafusion_err!("{}", e))?;
+                let table_factory = DuckDBTableFactory::new(Arc::new(pool));
 
                 tokio::task::block_in_place(|| {
                     Handle::current().block_on(async {
@@ -45,7 +38,7 @@ impl TableFunctionImpl for PostgresScanUDTF {
                 })
                 .map_err(|e| exec_datafusion_err!("{}", e))
             }
-            _ => plan_err!("postgres_scan arguments must be string literals"),
+            _ => plan_err!("duckdb_scan arguments must be string literals"),
         }
     }
 }

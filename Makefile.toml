@@ -52,6 +52,10 @@ args = [
 command = "cargo"
 args = ["run", "--bin", "dataclod-core"]
 
+[tasks.core-release]
+command = "cargo"
+args = ["run", "--bin", "dataclod-core", "--release"]
+
 [tasks.core-console]
 env = { RUSTFLAGS = "--cfg tokio_unstable" }
 command = "cargo"

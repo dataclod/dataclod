@@ -75,9 +75,13 @@ async-trait = "0.1"
 chrono = "0.4"
 dashmap = "6.0"
 datafusion = { version = "41.0", features = ["serde"] }
-datafusion-table-providers = { git = "https://github.com/datafusion-contrib/datafusion-table-providers.git", rev = "4a7d8b798b7d3965f59389862b49ab7fa6b3363e", features = [
+datafusion-table-providers = { git = "https://github.com/datafusion-contrib/datafusion-table-providers.git", rev = "b51003b01879adce3ede9d38ec1e07e43258c706", features = [
+  "duckdb",
+  "mysql",
+  "postgres",
   "sqlite",
 ] }
+duckdb = "1.0"
 futures = "0.3"
 num-traits = "0.2"
 tikv-jemallocator = "0.6"
@@ -85,4 +89,4 @@ tokio = { version = "1.39", features = ["full"] }
 tracing = "0.1"
 
 [patch.crates-io]
-datafusion-federation = { git = "https://github.com/spiceai/datafusion-federation.git", rev = "9b4392f45546dd3a1232c18ad36189bcc3cd408d" }
+datafusion-federation = { git = "https://github.com/spiceai/datafusion-federation.git", rev = "21f07bec7284bcbff2bf4e570008290b66e3dc6f" }

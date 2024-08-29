@@ -13,12 +13,8 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
-chrono.workspace = true
 datafusion.workspace = true
 datafusion-extra.workspace = true
 datafusion-table-providers.workspace = true
-futures.workspace = true
+duckdb.workspace = true
 tokio.workspace = true
-tokio-postgres = "0.7.11"
-tracing.workspace = true

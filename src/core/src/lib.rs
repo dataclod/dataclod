@@ -1,5 +1,4 @@
 mod context;
-mod datasource;
 mod expr;
 mod parser;
 
