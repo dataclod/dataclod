@@ -1,4 +1,5 @@
 mod pg_class;
+mod pg_database;
 mod pg_description;
 mod pg_namespace;
 mod pg_type;
@@ -9,9 +10,12 @@ use anyhow::Result;
 use datafusion::catalog_common::{MemorySchemaProvider, SchemaProvider};
 use datafusion::execution::context::SessionContext;
 use pg_class::PgClassTable;
+use pg_database::PgDatabaseTable;
 use pg_description::PgDescriptionTable;
 use pg_namespace::PgNamespaceTable;
 use pg_type::PgTypeTable;
+
+const CURRENT_DATABASE: &str = "postgres";
 
 pub fn with_pg_catalog(ctx: &SessionContext) -> Result<()> {
     let pg_catalog = MemorySchemaProvider::new();
@@ -27,6 +31,10 @@ pub fn with_pg_catalog(ctx: &SessionContext) -> Result<()> {
     ctx.register_table("public.pg_namespace", Arc::new(PgNamespaceTable::new()))?;
     ctx.register_table("public.pg_class", Arc::new(PgClassTable::new()))?;
     ctx.register_table("public.pg_description", Arc::new(PgDescriptionTable::new()))?;
+    ctx.register_table(
+        "public.pg_database",
+        Arc::new(PgDatabaseTable::new(CURRENT_DATABASE)),
+    )?;
 
     let default_catalog = ctx
         .catalog(&ctx.state().config_options().catalog.default_catalog)

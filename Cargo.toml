@@ -73,7 +73,6 @@ server = { package = "dataclod-server", path = "src/server", version = "0.0.2" }
 anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
-dashmap = "6.0"
 datafusion = { version = "41.0", features = ["serde"] }
 datafusion-table-providers = { git = "https://github.com/datafusion-contrib/datafusion-table-providers.git", rev = "b51003b01879adce3ede9d38ec1e07e43258c706", features = [
   "duckdb",
@@ -85,7 +84,7 @@ duckdb = "1.0"
 futures = "0.3"
 num-traits = "0.2"
 tikv-jemallocator = "0.6"
-tokio = { version = "1.39", features = ["full"] }
+tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 
 [patch.crates-io]
