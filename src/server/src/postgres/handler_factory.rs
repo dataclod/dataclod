@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use pgwire::api::copy::NoopCopyHandler;
 use pgwire::api::PgWireHandlerFactory;
+use pgwire::api::copy::NoopCopyHandler;
 use tokio::sync::Mutex;
 
 use super::auth::{DataClodAuthSource, DataClodParameterProvider, DataClodStartupHandler};

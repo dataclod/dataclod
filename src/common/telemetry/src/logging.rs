@@ -3,10 +3,10 @@ use std::sync::{Arc, LazyLock, Mutex, Once};
 
 use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::fmt::writer::MakeWriterExt;
-use tracing_subscriber::fmt::Layer;
-use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
+use tracing_subscriber::fmt::Layer;
+use tracing_subscriber::fmt::writer::MakeWriterExt;
+use tracing_subscriber::layer::SubscriberExt;
 
 pub fn init_logging() -> Vec<WorkerGuard> {
     let mut guards = vec![];

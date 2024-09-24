@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use datafusion::arrow::array::{ListBuilder, StringBuilder};
 use datafusion::arrow::datatypes::{DataType, Field};
-use datafusion::common::{plan_err, Result as DFResult, ScalarValue};
+use datafusion::common::{Result as DFResult, ScalarValue, plan_err};
 use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
 
 pub fn create_udf() -> ScalarUDF {

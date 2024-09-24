@@ -6,7 +6,7 @@ use datafusion::arrow::array::{Array, Int64Builder, NullArray};
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::cast::as_list_array;
 use datafusion::common::{
-    not_impl_err, plan_datafusion_err, plan_err, Result as DFResult, ScalarValue,
+    Result as DFResult, ScalarValue, not_impl_err, plan_datafusion_err, plan_err,
 };
 use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
 

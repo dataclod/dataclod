@@ -5,7 +5,7 @@ use common_utils::PgTypeId;
 use datafusion::arrow::array::StringArray;
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::cast::as_int64_array;
-use datafusion::common::{plan_err, Result as DFResult, ScalarValue};
+use datafusion::common::{Result as DFResult, ScalarValue, plan_err};
 use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
 
 pub fn create_udf() -> ScalarUDF {

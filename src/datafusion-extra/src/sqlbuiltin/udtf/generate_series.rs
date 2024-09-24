@@ -6,15 +6,15 @@ use datafusion::arrow::array::Int64Array;
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::catalog::Session;
-use datafusion::common::{plan_err, ScalarValue};
-use datafusion::datasource::function::TableFunctionImpl;
+use datafusion::common::{ScalarValue, plan_err};
 use datafusion::datasource::TableProvider;
+use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::error::Result as DFResult;
 use datafusion::execution::context::ExecutionProps;
 use datafusion::logical_expr::{Expr, TableType};
 use datafusion::optimizer::simplify_expressions::{ExprSimplifier, SimplifyContext};
-use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::memory::MemoryExec;
 
 pub struct GenerateSeriesUDTF;
 

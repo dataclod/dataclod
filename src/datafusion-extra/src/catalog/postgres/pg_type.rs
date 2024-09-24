@@ -10,8 +10,8 @@ use datafusion::catalog::Session;
 use datafusion::common::Result as DFResult;
 use datafusion::datasource::TableProvider;
 use datafusion::logical_expr::{Expr, TableType};
-use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::memory::MemoryExec;
 
 struct PgTypeBuilder {
     oid: UInt32Builder,

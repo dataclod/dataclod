@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use dataclod::sql_to_statement;
 use datafusion::sql::parser::Statement;
-use pgwire::api::stmt::QueryParser;
 use pgwire::api::Type;
+use pgwire::api::stmt::QueryParser;
 use pgwire::error::{PgWireError, PgWireResult};
 
 pub struct DataClodQueryParser;

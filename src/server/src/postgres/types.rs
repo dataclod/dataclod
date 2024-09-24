@@ -7,11 +7,11 @@ use datafusion::common::DFSchema;
 use datafusion::prelude::DataFrame;
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::parser::Statement;
-use futures::{stream, TryStreamExt};
+use futures::{TryStreamExt, stream};
 use num_traits::NumCast;
+use pgwire::api::Type;
 use pgwire::api::portal::{Format, Portal};
 use pgwire::api::results::{DataRowEncoder, FieldInfo, QueryResponse};
-use pgwire::api::Type;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 
 use super::utils::*;
@@ -706,11 +706,9 @@ encode_large_list_value!(
     make_time64_nanos
 );
 encode_large_list_value!(encode_binary_large_list_value, BinaryArray, &[u8]);
-encode_large_list_value!(
-    encode_large_binary_large_list_value,
-    LargeBinaryArray,
-    &[u8]
-);
+encode_large_list_value!(encode_large_binary_large_list_value, LargeBinaryArray, &[
+    u8
+]);
 encode_large_list_value!(
     encode_fixed_size_binary_large_list_value,
     FixedSizeBinaryArray,

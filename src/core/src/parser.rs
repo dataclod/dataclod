@@ -1,4 +1,4 @@
-use datafusion::common::{not_impl_datafusion_err, not_impl_err, Result as DFResult};
+use datafusion::common::{Result as DFResult, not_impl_datafusion_err, not_impl_err};
 use datafusion::sql::parser::{DFParser, Statement};
 
 pub fn sql_to_statement(sql: &str) -> DFResult<Statement> {

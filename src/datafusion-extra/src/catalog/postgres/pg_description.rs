@@ -9,8 +9,8 @@ use datafusion::catalog::Session;
 use datafusion::datasource::{TableProvider, TableType};
 use datafusion::error::Result as DFResult;
 use datafusion::logical_expr::Expr;
-use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::memory::MemoryExec;
 
 struct PgCatalogDescriptionBuilder {
     objoid: UInt32Builder,

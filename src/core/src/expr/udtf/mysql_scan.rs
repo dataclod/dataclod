@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use datafusion::common::{exec_datafusion_err, plan_err, ScalarValue};
-use datafusion::datasource::function::TableFunctionImpl;
+use datafusion::common::{ScalarValue, exec_datafusion_err, plan_err};
 use datafusion::datasource::TableProvider;
+use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::error::Result as DFResult;
 use datafusion::logical_expr::Expr;
 use datafusion::sql::TableReference;

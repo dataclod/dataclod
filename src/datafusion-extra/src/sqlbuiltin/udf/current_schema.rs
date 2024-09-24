@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use datafusion::arrow::datatypes::DataType;
-use datafusion::common::{not_impl_err, Result as DFResult, ScalarValue};
+use datafusion::common::{Result as DFResult, ScalarValue, not_impl_err};
 use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
 
 pub fn create_udf() -> ScalarUDF {
