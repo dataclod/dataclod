@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use datafusion::common::{ScalarValue, exec_datafusion_err, plan_err};
 use datafusion::datasource::TableProvider;
@@ -26,9 +27,13 @@ impl TableFunctionImpl for SqliteScanUDTF {
             ) => {
                 let pool = tokio::task::block_in_place(|| {
                     Handle::current().block_on(async {
-                        SqliteConnectionPoolFactory::new(db_path, Mode::File)
-                            .build()
-                            .await
+                        SqliteConnectionPoolFactory::new(
+                            db_path,
+                            Mode::File,
+                            Duration::from_secs(5),
+                        )
+                        .build()
+                        .await
                     })
                 })
                 .map_err(|e| exec_datafusion_err!("{}", e))?;

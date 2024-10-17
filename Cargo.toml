@@ -73,14 +73,14 @@ server = { package = "dataclod-server", path = "src/server", version = "0.0.2" }
 anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
-datafusion = { version = "41.0", features = ["serde"] }
-datafusion-table-providers = { version = "0.1.0", features = [
+datafusion = { version = "42.0", features = ["serde"] }
+datafusion-table-providers = { version = "0.2.2", features = [
   "duckdb",
   "mysql",
   "postgres",
   "sqlite",
 ] }
-duckdb = "1.0"
+duckdb = "1.1.1"
 futures = "0.3"
 num-traits = "0.2"
 tikv-jemallocator = "0.6"
