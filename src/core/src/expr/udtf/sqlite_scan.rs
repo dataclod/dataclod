@@ -12,6 +12,7 @@ use datafusion_table_providers::sql::db_connection_pool::sqlitepool::SqliteConne
 use datafusion_table_providers::sqlite::SqliteTableFactory;
 use tokio::runtime::Handle;
 
+#[derive(Debug)]
 pub struct SqliteScanUDTF;
 
 impl TableFunctionImpl for SqliteScanUDTF {

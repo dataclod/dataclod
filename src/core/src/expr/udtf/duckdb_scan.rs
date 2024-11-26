@@ -11,6 +11,7 @@ use datafusion_table_providers::sql::db_connection_pool::duckdbpool::DuckDbConne
 use duckdb::AccessMode;
 use tokio::runtime::Handle;
 
+#[derive(Debug)]
 pub struct DuckDBScanUDTF;
 
 impl TableFunctionImpl for DuckDBScanUDTF {

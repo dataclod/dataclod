@@ -65,6 +65,7 @@ impl PgTypeBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct PgTypeTable {
     data: Vec<ArrayRef>,
 }

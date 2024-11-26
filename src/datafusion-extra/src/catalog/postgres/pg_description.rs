@@ -35,6 +35,7 @@ impl PgCatalogDescriptionBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct PgDescriptionTable {
     data: Vec<ArrayRef>,
 }

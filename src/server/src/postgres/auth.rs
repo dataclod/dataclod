@@ -64,7 +64,7 @@ impl<A: AuthSource, P: ServerParameterProvider> StartupHandler for DataClodStart
                         client,
                         self.parameter_provider.as_ref(),
                     )
-                    .await
+                    .await?
                 } else {
                     let error_info = ErrorInfo::new(
                         "FATAL".to_owned(),

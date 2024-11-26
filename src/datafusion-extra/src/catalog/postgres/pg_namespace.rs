@@ -42,6 +42,7 @@ impl PgCatalogNamespaceBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct PgNamespaceTable {
     data: Vec<ArrayRef>,
 }

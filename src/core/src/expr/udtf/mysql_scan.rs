@@ -12,6 +12,7 @@ use datafusion_table_providers::sql::db_connection_pool::mysqlpool::MySQLConnect
 use datafusion_table_providers::util::secrets::to_secret_map;
 use tokio::runtime::Handle;
 
+#[derive(Debug)]
 pub struct MySQLScanUDTF;
 
 impl TableFunctionImpl for MySQLScanUDTF {

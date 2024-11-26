@@ -49,6 +49,7 @@ impl PgDatabaseBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct PgDatabaseTable {
     data: Vec<ArrayRef>,
 }

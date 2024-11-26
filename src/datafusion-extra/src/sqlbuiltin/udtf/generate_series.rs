@@ -16,6 +16,7 @@ use datafusion::optimizer::simplify_expressions::{ExprSimplifier, SimplifyContex
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_plan::memory::MemoryExec;
 
+#[derive(Debug)]
 pub struct GenerateSeriesUDTF;
 
 impl TableFunctionImpl for GenerateSeriesUDTF {
@@ -46,6 +47,7 @@ impl TableFunctionImpl for GenerateSeriesUDTF {
     }
 }
 
+#[derive(Debug)]
 struct GenerateSeriesTable<T: Send + Sync> {
     start: T,
     stop: T,

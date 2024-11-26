@@ -42,6 +42,7 @@ impl PgCatalogClassBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct PgClassTable {
     data: Vec<ArrayRef>,
 }
