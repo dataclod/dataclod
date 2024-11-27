@@ -3,13 +3,9 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use super::handler_factory::PostgresBackendFactory;
-use super::query_handler::{ExtendedPostgresBackend, SimplePostgresBackend};
 
 pub async fn server(tcp_addr: String) {
-    let factory = Arc::new(PostgresBackendFactory {
-        simple_handler: Arc::new(SimplePostgresBackend::new()),
-        extended_handler: Arc::new(ExtendedPostgresBackend::new()),
-    });
+    let factory = Arc::new(PostgresBackendFactory::new());
 
     let listener = TcpListener::bind(&tcp_addr)
         .await

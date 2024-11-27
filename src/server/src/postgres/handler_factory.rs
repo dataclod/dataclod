@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use pgwire::api::PgWireHandlerFactory;
+use dataclod::QueryContext;
 use pgwire::api::copy::NoopCopyHandler;
+use pgwire::api::PgWireHandlerFactory;
 use tokio::sync::Mutex;
 
 use super::auth::{DataClodAuthSource, DataClodParameterProvider, DataClodStartupHandler};
@@ -10,6 +11,16 @@ use super::query_handler::{ExtendedPostgresBackend, SimplePostgresBackend};
 pub struct PostgresBackendFactory {
     pub simple_handler: Arc<SimplePostgresBackend>,
     pub extended_handler: Arc<ExtendedPostgresBackend>,
+}
+
+impl PostgresBackendFactory {
+    pub fn new() -> Self {
+        let ctx = Arc::new(QueryContext::new());
+        Self {
+            simple_handler: Arc::new(SimplePostgresBackend::new(ctx.clone())),
+            extended_handler: Arc::new(ExtendedPostgresBackend::new(ctx)),
+        }
+    }
 }
 
 impl PgWireHandlerFactory for PostgresBackendFactory {

@@ -5,7 +5,7 @@ use dataclod::QueryContext;
 use datafusion::sql::parser::Statement;
 use pgwire::api::portal::{Format, Portal};
 use pgwire::api::query::{ExtendedQueryHandler, SimpleQueryHandler};
-use pgwire::api::results::{DescribePortalResponse, DescribeStatementResponse, Response};
+use pgwire::api::results::{DescribePortalResponse, DescribeStatementResponse, Response, Tag};
 use pgwire::api::stmt::StoredStatement;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 use tracing::debug;
@@ -18,10 +18,8 @@ pub struct SimplePostgresBackend {
 }
 
 impl SimplePostgresBackend {
-    pub fn new() -> Self {
-        Self {
-            session_context: Arc::new(QueryContext::new()),
-        }
+    pub fn new(session_context: Arc<QueryContext>) -> Self {
+        Self { session_context }
     }
 }
 
@@ -31,6 +29,32 @@ impl SimpleQueryHandler for SimplePostgresBackend {
         &self, _client: &mut C, query: &'a str,
     ) -> PgWireResult<Vec<Response<'a>>> {
         debug!("simple query: {}", query);
+
+        let stmt =
+            dataclod::sql_to_statement(query).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+        if let Statement::Statement(stmt) = stmt {
+            match stmt.as_ref() {
+                datafusion::sql::sqlparser::ast::Statement::StartTransaction { .. } => {
+                    return Ok(vec![Response::TransactionStart(Tag::new("BEGIN"))]);
+                }
+                datafusion::sql::sqlparser::ast::Statement::Commit { .. } => {
+                    return Ok(vec![Response::Execution(Tag::new("COMMIT"))]);
+                }
+                datafusion::sql::sqlparser::ast::Statement::Rollback { .. } => {
+                    return Ok(vec![Response::TransactionEnd(Tag::new("ROLLBACK"))]);
+                }
+                _ => {}
+            }
+        }
+
+        if query.eq_ignore_ascii_case("begin") {
+            return Ok(vec![Response::TransactionStart(Tag::new("BEGIN"))]);
+        } else if query.eq_ignore_ascii_case("commit") {
+            return Ok(vec![Response::Execution(Tag::new("COMMIT"))]);
+        } else if query.eq_ignore_ascii_case("abort") || query.eq_ignore_ascii_case("rollback") {
+            return Ok(vec![Response::TransactionEnd(Tag::new("ROLLBACK"))]);
+        }
 
         let df = self
             .session_context
@@ -49,9 +73,9 @@ pub struct ExtendedPostgresBackend {
 }
 
 impl ExtendedPostgresBackend {
-    pub fn new() -> Self {
+    pub fn new(session_context: Arc<QueryContext>) -> Self {
         Self {
-            session_context: Arc::new(QueryContext::new()),
+            session_context,
             query_parser: Arc::new(DataClodQueryParser),
         }
     }
@@ -70,6 +94,21 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
         &self, _client: &mut C, portal: &'a Portal<Self::Statement>, _max_rows: usize,
     ) -> PgWireResult<Response<'a>> {
         debug!("extend query: {}", portal.statement.statement);
+
+        if let Statement::Statement(stmt) = &portal.statement.statement {
+            match stmt.as_ref() {
+                datafusion::sql::sqlparser::ast::Statement::StartTransaction { .. } => {
+                    return Ok(Response::TransactionStart(Tag::new("BEGIN")));
+                }
+                datafusion::sql::sqlparser::ast::Statement::Commit { .. } => {
+                    return Ok(Response::Execution(Tag::new("COMMIT")));
+                }
+                datafusion::sql::sqlparser::ast::Statement::Rollback { .. } => {
+                    return Ok(Response::TransactionEnd(Tag::new("ROLLBACK")));
+                }
+                _ => {}
+            }
+        }
 
         let df = self
             .session_context
