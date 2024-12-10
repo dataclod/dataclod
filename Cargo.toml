@@ -1,6 +1,6 @@
 [workspace.package]
 version = "0.0.2"
-edition = "2021"
+edition = "2024"
 authors = ["xhwhis <hi@whis.me>"]
 description = "[WIP] DataClod"
 homepage = "https://github/dataclod"
@@ -84,8 +84,8 @@ duckdb = "1.1.1"
 futures = "0.3"
 num-traits = "0.2"
 tikv-jemallocator = "0.6"
-tokio = { version = "1.41", features = ["full"] }
+tokio = { version = "1.42", features = ["full"] }
 tracing = "0.1"
 
 [patch.crates-io]
-datafusion-table-providers = { git = "https://github.com/datafusion-contrib/datafusion-table-providers.git", rev = "86cd13c395fa8dd8939f6d55c5317385139f48e8" }
+datafusion-table-providers = { git = "https://github.com/datafusion-contrib/datafusion-table-providers.git", rev = "00a2af67787efbe0fdf36dc3fbe78c988109b06d" }

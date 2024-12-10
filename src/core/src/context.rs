@@ -15,7 +15,10 @@ impl Default for QueryContext {
 
 impl QueryContext {
     pub fn new() -> Self {
-        let config = SessionConfig::new().with_information_schema(true);
+        let config = SessionConfig::new().with_information_schema(true).set_bool(
+            "datafusion.execution.skip_physical_aggregate_schema_check",
+            true,
+        );
         let ctx = SessionContext::new_with_config(config);
         datafusion_extra::catalog::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");
         datafusion_extra::sqlbuiltin::register_udtf(&ctx);

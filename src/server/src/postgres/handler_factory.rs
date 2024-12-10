@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use dataclod::QueryContext;
 use pgwire::api::copy::NoopCopyHandler;
-use pgwire::api::PgWireHandlerFactory;
+use pgwire::api::{NoopErrorHandler, PgWireServerHandlers};
 use tokio::sync::Mutex;
 
 use super::auth::{DataClodAuthSource, DataClodParameterProvider, DataClodStartupHandler};
@@ -23,8 +23,9 @@ impl PostgresBackendFactory {
     }
 }
 
-impl PgWireHandlerFactory for PostgresBackendFactory {
+impl PgWireServerHandlers for PostgresBackendFactory {
     type CopyHandler = NoopCopyHandler;
+    type ErrorHandler = NoopErrorHandler;
     type ExtendedQueryHandler = ExtendedPostgresBackend;
     type SimpleQueryHandler = SimplePostgresBackend;
     type StartupHandler = DataClodStartupHandler<DataClodAuthSource, DataClodParameterProvider>;
@@ -47,5 +48,9 @@ impl PgWireHandlerFactory for PostgresBackendFactory {
 
     fn copy_handler(&self) -> Arc<Self::CopyHandler> {
         Arc::new(NoopCopyHandler)
+    }
+
+    fn error_handler(&self) -> Arc<Self::ErrorHandler> {
+        Arc::new(NoopErrorHandler)
     }
 }
