@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use datafusion::catalog::TableFunctionImpl;
 use datafusion::common::{ScalarValue, exec_datafusion_err, plan_err};
 use datafusion::datasource::TableProvider;
-use datafusion::datasource::function::TableFunctionImpl;
 use datafusion::error::Result as DFResult;
 use datafusion::logical_expr::Expr;
 use datafusion::sql::TableReference;
