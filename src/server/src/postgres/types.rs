@@ -50,7 +50,7 @@ pub fn encode_parameters(portal: &Portal<Statement>) -> PgWireResult<Vec<ScalarV
 }
 
 pub async fn encode_dataframe<'a>(
-    df: DataFrame, format: &Format,
+    df: DataFrame, format: &Format, _row_limit: usize,
 ) -> PgWireResult<QueryResponse<'a>> {
     let schema = df.schema();
     let fields = Arc::new(encode_schema(schema, format)?);
@@ -706,9 +706,11 @@ encode_large_list_value!(
     make_time64_nanos
 );
 encode_large_list_value!(encode_binary_large_list_value, BinaryArray, &[u8]);
-encode_large_list_value!(encode_large_binary_large_list_value, LargeBinaryArray, &[
-    u8
-]);
+encode_large_list_value!(
+    encode_large_binary_large_list_value,
+    LargeBinaryArray,
+    &[u8]
+);
 encode_large_list_value!(
     encode_fixed_size_binary_large_list_value,
     FixedSizeBinaryArray,

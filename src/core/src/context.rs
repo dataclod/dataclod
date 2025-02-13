@@ -21,7 +21,6 @@ impl QueryContext {
         );
         let ctx = SessionContext::new_with_config(config);
         datafusion_extra::catalog::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");
-        datafusion_extra::sqlbuiltin::register_udtf(&ctx);
         datafusion_extra::sqlbuiltin::register_udf(&ctx);
         crate::expr::register_udtf(&ctx);
 

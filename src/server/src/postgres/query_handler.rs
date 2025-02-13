@@ -13,6 +13,8 @@ use tracing::debug;
 use super::query_parser::DataClodQueryParser;
 use super::types::{encode_dataframe, encode_parameters, encode_schema};
 
+const DEFAULT_ROW_LIMIT: usize = 1024;
+
 pub struct SimplePostgresBackend {
     pub session_context: Arc<QueryContext>,
 }
@@ -61,7 +63,7 @@ impl SimpleQueryHandler for SimplePostgresBackend {
             .sql(query)
             .await
             .map_err(|e| PgWireError::ApiError(e.into()))?;
-        let resp = encode_dataframe(df, &Format::UnifiedText).await?;
+        let resp = encode_dataframe(df, &Format::UnifiedText, DEFAULT_ROW_LIMIT).await?;
 
         Ok(vec![Response::Query(resp)])
     }
@@ -91,7 +93,7 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
     }
 
     async fn do_query<'a, C>(
-        &self, _client: &mut C, portal: &'a Portal<Self::Statement>, _max_rows: usize,
+        &self, _client: &mut C, portal: &'a Portal<Self::Statement>, max_rows: usize,
     ) -> PgWireResult<Response<'a>> {
         debug!("extend query: {}", portal.statement.statement);
 
@@ -118,14 +120,14 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
 
         // TODO: better error handling
         if portal.statement.parameter_types.is_empty() {
-            let resp = encode_dataframe(df, &portal.result_column_format).await?;
+            let resp = encode_dataframe(df, &portal.result_column_format, max_rows).await?;
             Ok(Response::Query(resp))
         } else {
             let parameters = encode_parameters(portal)?;
             let df = df
                 .with_param_values(parameters)
                 .map_err(|e| PgWireError::ApiError(e.into()))?;
-            let resp = encode_dataframe(df, &portal.result_column_format).await?;
+            let resp = encode_dataframe(df, &portal.result_column_format, max_rows).await?;
             Ok(Response::Query(resp))
         }
     }
