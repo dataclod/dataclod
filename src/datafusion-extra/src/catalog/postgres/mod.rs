@@ -7,7 +7,7 @@ mod pg_type;
 use std::sync::Arc;
 
 use anyhow::Result;
-use datafusion::catalog_common::{MemorySchemaProvider, SchemaProvider};
+use datafusion::catalog::{MemorySchemaProvider, SchemaProvider};
 use datafusion::execution::context::SessionContext;
 use pg_class::PgClassTable;
 use pg_database::PgDatabaseTable;
