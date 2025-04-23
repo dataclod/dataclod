@@ -16,5 +16,5 @@ anyhow.workspace = true
 datafusion.workspace = true
 datafusion-extra.workspace = true
 datafusion-table-providers.workspace = true
-duckdb.workspace = true
+spiceai_duckdb_fork.workspace = true
 tokio.workspace = true

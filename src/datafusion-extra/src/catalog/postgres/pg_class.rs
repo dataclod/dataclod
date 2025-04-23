@@ -7,10 +7,10 @@ use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::catalog::Session;
 use datafusion::common::Result as DFResult;
+use datafusion::datasource::memory::MemorySourceConfig;
 use datafusion::datasource::{TableProvider, TableType};
 use datafusion::logical_expr::Expr;
 use datafusion::physical_plan::ExecutionPlan;
-use datafusion::physical_plan::memory::MemoryExec;
 
 struct _PgClass<'a> {
     oid: u32,
@@ -80,10 +80,10 @@ impl TableProvider for PgClassTable {
     ) -> DFResult<Arc<dyn ExecutionPlan>> {
         let batch = RecordBatch::try_new(self.schema(), self.data.clone())?;
 
-        Ok(Arc::new(MemoryExec::try_new(
+        Ok(MemorySourceConfig::try_new_exec(
             &[vec![batch]],
             self.schema(),
             projection.cloned(),
-        )?))
+        )?)
     }
 }

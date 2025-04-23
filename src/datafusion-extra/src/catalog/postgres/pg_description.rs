@@ -6,11 +6,11 @@ use datafusion::arrow::array::{ArrayRef, StringBuilder, UInt32Builder};
 use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::catalog::Session;
+use datafusion::datasource::memory::MemorySourceConfig;
 use datafusion::datasource::{TableProvider, TableType};
 use datafusion::error::Result as DFResult;
 use datafusion::logical_expr::Expr;
 use datafusion::physical_plan::ExecutionPlan;
-use datafusion::physical_plan::memory::MemoryExec;
 
 struct PgCatalogDescriptionBuilder {
     objoid: UInt32Builder,
@@ -73,10 +73,10 @@ impl TableProvider for PgDescriptionTable {
     ) -> DFResult<Arc<dyn ExecutionPlan>> {
         let batch = RecordBatch::try_new(self.schema(), self.data.clone())?;
 
-        Ok(Arc::new(MemoryExec::try_new(
+        Ok(MemorySourceConfig::try_new_exec(
             &[vec![batch]],
             self.schema(),
             projection.cloned(),
-        )?))
+        )?)
     }
 }
