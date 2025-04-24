@@ -1137,6 +1137,7 @@ name = "dataclod-server"
 version = "0.0.2"
 dependencies = [
  "async-trait",
+ "bytes",
  "chrono",
  "dataclod",
  "datafusion",
@@ -1144,7 +1145,9 @@ dependencies = [
  "futures",
  "num-traits",
  "pgwire",
+ "postgres-types",
  "rand 0.9.1",
+ "rust_decimal",
  "tokio",
  "tracing",
 ]

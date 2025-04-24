@@ -1,12 +1,15 @@
+mod decimal;
+
 use std::sync::Arc;
 
-use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use datafusion::arrow::array::*;
 use datafusion::arrow::datatypes::{DataType, TimeUnit};
 use datafusion::common::DFSchema;
 use datafusion::prelude::DataFrame;
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::parser::Statement;
+use decimal::{Decimal128, Decimal256};
 use duplicate::duplicate_item;
 use futures::{TryStreamExt, stream};
 use num_traits::NumCast;
@@ -191,6 +194,7 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
         DataType::Timestamp(TimeUnit::Millisecond, _) => encode_ts_millis_value(encoder, arr, idx)?,
         DataType::Timestamp(TimeUnit::Microsecond, _) => encode_ts_micros_value(encoder, arr, idx)?,
         DataType::Timestamp(TimeUnit::Nanosecond, _) => encode_ts_nanos_value(encoder, arr, idx)?,
+        DataType::Interval(_) => todo!(),
         DataType::Date32 => encode_date32_value(encoder, arr, idx)?,
         DataType::Date64 => encode_date64_value(encoder, arr, idx)?,
         DataType::Time32(TimeUnit::Second) => encode_time32_value(encoder, arr, idx)?,
@@ -235,7 +239,7 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                         .unwrap()
                         .value(idx)
                 }
-                _ => panic!("{} is not a valid list type", list_type),
+                _ => panic!("{list_type} is not a valid list type"),
             };
             assert_eq!(list_value.data_type(), field.data_type());
 
@@ -277,6 +281,7 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                 DataType::Time64(TimeUnit::Nanosecond) => {
                     encode_time64_nanos_list_value(encoder, &list_value)?
                 }
+                DataType::Interval(_) => todo!(),
                 DataType::Binary => encode_binary_list_value(encoder, &list_value)?,
                 DataType::FixedSizeBinary(_) => {
                     encode_fixed_size_binary_list_value(encoder, &list_value)?
@@ -286,11 +291,27 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                 DataType::Utf8 => encode_utf8_list_value(encoder, &list_value)?,
                 DataType::LargeUtf8 => encode_large_utf8_list_value(encoder, &list_value)?,
                 DataType::Utf8View => encode_utf8_view_list_value(encoder, &list_value)?,
-                DataType::Decimal128(_precision, _scale) => {
-                    todo!()
+                DataType::Decimal128(precision, scale) => {
+                    encoder.encode_field(
+                        &list_value
+                            .as_any()
+                            .downcast_ref::<Decimal128Array>()
+                            .unwrap()
+                            .iter()
+                            .map(|opt| opt.map(|dec| Decimal128::new(dec, *precision, *scale)))
+                            .collect::<Vec<Option<Decimal128>>>(),
+                    )?
                 }
-                DataType::Decimal256(_precision, _scale) => {
-                    todo!()
+                DataType::Decimal256(precision, scale) => {
+                    encoder.encode_field(
+                        &list_value
+                            .as_any()
+                            .downcast_ref::<Decimal256Array>()
+                            .unwrap()
+                            .iter()
+                            .map(|opt| opt.map(|dec| Decimal256::new(dec, *precision, *scale)))
+                            .collect::<Vec<Option<Decimal256>>>(),
+                    )?
                 }
                 value_type => {
                     return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
@@ -304,11 +325,25 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                 }
             }
         }
-        DataType::Decimal128(_precision, _scale) => {
-            todo!()
+        DataType::Decimal128(precision, scale) => {
+            encoder.encode_field(&Decimal128::new(
+                arr.as_any()
+                    .downcast_ref::<Decimal128Array>()
+                    .unwrap()
+                    .value(idx),
+                *precision,
+                *scale,
+            ))?
         }
-        DataType::Decimal256(_precision, _scale) => {
-            todo!()
+        DataType::Decimal256(precision, scale) => {
+            encoder.encode_field(&Decimal256::new(
+                arr.as_any()
+                    .downcast_ref::<Decimal256Array>()
+                    .unwrap()
+                    .value(idx),
+                *precision,
+                *scale,
+            ))?
         }
         arr_type => {
             return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
@@ -403,8 +438,8 @@ fn fn_name(encoder: &mut DataRowEncoder, list_value: &ArrayRef) -> PgWireResult<
     [encode_ts_millis_list_value]       [TimestampMillisecondArray] [make_ts_millis]            [NaiveDateTime];
     [encode_ts_micros_list_value]       [TimestampMicrosecondArray] [make_ts_micros]            [NaiveDateTime];
     [encode_ts_nanos_list_value]        [TimestampNanosecondArray]  [make_ts_nanos]             [NaiveDateTime];
-    [encode_date32_list_value]          [Date32Array]               [make_date32]               [DateTime<Utc>];
-    [encode_date64_list_value]          [Date64Array]               [make_date64]               [DateTime<Utc>];
+    [encode_date32_list_value]          [Date32Array]               [make_date32]               [NaiveDate];
+    [encode_date64_list_value]          [Date64Array]               [make_date64]               [NaiveDate];
     [encode_time32_list_value]          [Time32SecondArray]         [make_time32]               [NaiveTime];
     [encode_time32_millis_list_value]   [Time32MillisecondArray]    [make_time32_millis]        [NaiveTime];
     [encode_time64_micros_list_value]   [Time64MicrosecondArray]    [make_time64_micros]        [NaiveTime];

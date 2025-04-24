@@ -1,4 +1,6 @@
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
+
+const UNIX_EPOCH_DAY: i64 = 719_163;
 
 pub fn make_ts(val: i64) -> Option<NaiveDateTime> {
     DateTime::from_timestamp(val, 0).map(|dt| dt.naive_utc())
@@ -18,14 +20,13 @@ pub fn make_ts_nanos(val: i64) -> Option<NaiveDateTime> {
     DateTime::from_timestamp(secs, nsecs).map(|dt| dt.naive_utc())
 }
 
-pub fn make_date32(val: i32) -> Option<DateTime<Utc>> {
-    NaiveDate::from_num_days_from_ce_opt(val)
-        .and_then(|d| d.and_hms_opt(0, 0, 0))
-        .map(|dt| Utc.from_utc_datetime(&dt))
+pub fn make_date32(val: i32) -> Option<NaiveDate> {
+    NaiveDate::from_num_days_from_ce_opt(val + UNIX_EPOCH_DAY as i32)
 }
 
-pub fn make_date64(val: i64) -> Option<DateTime<Utc>> {
-    DateTime::from_timestamp_millis(val)
+pub fn make_date64(val: i64) -> Option<NaiveDate> {
+    let days = val.div_euclid(86_400_000_000) + UNIX_EPOCH_DAY;
+    NaiveDate::from_num_days_from_ce_opt(days as i32)
 }
 
 pub fn make_time32(val: i32) -> Option<NaiveTime> {
