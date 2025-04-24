@@ -1,17 +1,19 @@
 mod decimal;
+mod interval;
 
 use std::sync::Arc;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use datafusion::arrow::array::*;
-use datafusion::arrow::datatypes::{DataType, TimeUnit};
+use datafusion::arrow::datatypes::{DataType, IntervalMonthDayNano, IntervalUnit, TimeUnit};
 use datafusion::common::DFSchema;
 use datafusion::prelude::DataFrame;
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::parser::Statement;
-use decimal::{Decimal128, Decimal256};
+use decimal::PgDecimal;
 use duplicate::duplicate_item;
 use futures::{TryStreamExt, stream};
+use interval::PgInterval;
 use num_traits::NumCast;
 use pgwire::api::Type;
 use pgwire::api::portal::{Format, Portal};
@@ -43,7 +45,17 @@ pub fn encode_parameters(portal: &Portal<Statement>) -> PgWireResult<Vec<ScalarV
                 &Type::DATE => ScalarValue::Date32(portal.parameter(i, &Type::DATE)?),
                 &Type::TIME => ScalarValue::Time64Microsecond(portal.parameter(i, &Type::TIME)?),
                 &Type::INTERVAL => {
-                    todo!()
+                    ScalarValue::IntervalMonthDayNano(
+                        portal
+                            .parameter::<PgInterval>(i, &Type::INTERVAL)?
+                            .map(|interval| {
+                                IntervalMonthDayNano {
+                                    months: interval.months,
+                                    days: interval.days,
+                                    nanoseconds: interval.microseconds * 1000,
+                                }
+                            }),
+                    )
                 }
                 &Type::BYTEA => ScalarValue::Binary(portal.parameter(i, &Type::BYTEA)?),
                 &Type::NAME => ScalarValue::Utf8(portal.parameter(i, &Type::NAME)?),
@@ -194,7 +206,15 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
         DataType::Timestamp(TimeUnit::Millisecond, _) => encode_ts_millis_value(encoder, arr, idx)?,
         DataType::Timestamp(TimeUnit::Microsecond, _) => encode_ts_micros_value(encoder, arr, idx)?,
         DataType::Timestamp(TimeUnit::Nanosecond, _) => encode_ts_nanos_value(encoder, arr, idx)?,
-        DataType::Interval(_) => todo!(),
+        DataType::Interval(IntervalUnit::YearMonth) => {
+            encode_interval_year_month_value(encoder, arr, idx)?
+        }
+        DataType::Interval(IntervalUnit::DayTime) => {
+            encode_interval_day_time_value(encoder, arr, idx)?
+        }
+        DataType::Interval(IntervalUnit::MonthDayNano) => {
+            encode_interval_month_day_nano_value(encoder, arr, idx)?
+        }
         DataType::Date32 => encode_date32_value(encoder, arr, idx)?,
         DataType::Date64 => encode_date64_value(encoder, arr, idx)?,
         DataType::Time32(TimeUnit::Second) => encode_time32_value(encoder, arr, idx)?,
@@ -281,7 +301,15 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                 DataType::Time64(TimeUnit::Nanosecond) => {
                     encode_time64_nanos_list_value(encoder, &list_value)?
                 }
-                DataType::Interval(_) => todo!(),
+                DataType::Interval(IntervalUnit::YearMonth) => {
+                    encode_interval_year_month_list_value(encoder, &list_value)?
+                }
+                DataType::Interval(IntervalUnit::DayTime) => {
+                    encode_interval_day_time_list_value(encoder, &list_value)?
+                }
+                DataType::Interval(IntervalUnit::MonthDayNano) => {
+                    encode_interval_month_day_nano_list_value(encoder, &list_value)?
+                }
                 DataType::Binary => encode_binary_list_value(encoder, &list_value)?,
                 DataType::FixedSizeBinary(_) => {
                     encode_fixed_size_binary_list_value(encoder, &list_value)?
@@ -298,8 +326,8 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                             .downcast_ref::<Decimal128Array>()
                             .unwrap()
                             .iter()
-                            .map(|opt| opt.map(|dec| Decimal128::new(dec, *precision, *scale)))
-                            .collect::<Vec<Option<Decimal128>>>(),
+                            .map(|opt| opt.map(|dec| PgDecimal::new(dec, *precision, *scale)))
+                            .collect::<Vec<Option<PgDecimal>>>(),
                     )?
                 }
                 DataType::Decimal256(precision, scale) => {
@@ -309,8 +337,10 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                             .downcast_ref::<Decimal256Array>()
                             .unwrap()
                             .iter()
-                            .map(|opt| opt.map(|dec| Decimal256::new(dec, *precision, *scale)))
-                            .collect::<Vec<Option<Decimal256>>>(),
+                            .map(|opt| {
+                                opt.map(|dec| PgDecimal::new(dec.as_i128(), *precision, *scale))
+                            })
+                            .collect::<Vec<Option<PgDecimal>>>(),
                     )?
                 }
                 value_type => {
@@ -326,7 +356,7 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
             }
         }
         DataType::Decimal128(precision, scale) => {
-            encoder.encode_field(&Decimal128::new(
+            encoder.encode_field(&PgDecimal::new(
                 arr.as_any()
                     .downcast_ref::<Decimal128Array>()
                     .unwrap()
@@ -336,11 +366,12 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
             ))?
         }
         DataType::Decimal256(precision, scale) => {
-            encoder.encode_field(&Decimal256::new(
+            encoder.encode_field(&PgDecimal::new(
                 arr.as_any()
                     .downcast_ref::<Decimal256Array>()
                     .unwrap()
-                    .value(idx),
+                    .value(idx)
+                    .as_i128(),
                 *precision,
                 *scale,
             ))?
@@ -379,20 +410,23 @@ fn fn_name(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) -> PgWireRe
 }
 
 #[duplicate_item(
-    fn_name                         arr_ty                      closure_fn;
-    [encode_u8_value]               [UInt8Array]                [<i8 as NumCast>::from];
-    [encode_u16_value]              [UInt16Array]               [<i16 as NumCast>::from];
-    [encode_u64_value]              [UInt64Array]               [<i64 as NumCast>::from];
-    [encode_ts_value]               [TimestampSecondArray]      [make_ts];
-    [encode_ts_millis_value]        [TimestampMillisecondArray] [make_ts_millis];
-    [encode_ts_micros_value]        [TimestampMicrosecondArray] [make_ts_micros];
-    [encode_ts_nanos_value]         [TimestampNanosecondArray]  [make_ts_nanos];
-    [encode_date32_value]           [Date32Array]               [make_date32];
-    [encode_date64_value]           [Date64Array]               [make_date64];
-    [encode_time32_value]           [Time32SecondArray]         [make_time32];
-    [encode_time32_millis_value]    [Time32MillisecondArray]    [make_time32_millis];
-    [encode_time64_micros_value]    [Time64MicrosecondArray]    [make_time64_micros];
-    [encode_time64_nanos_value]     [Time64NanosecondArray]     [make_time64_nanos];
+    fn_name                                 arr_ty                      closure_fn;
+    [encode_u8_value]                       [UInt8Array]                [<i8 as NumCast>::from];
+    [encode_u16_value]                      [UInt16Array]               [<i16 as NumCast>::from];
+    [encode_u64_value]                      [UInt64Array]               [<i64 as NumCast>::from];
+    [encode_ts_value]                       [TimestampSecondArray]      [make_ts];
+    [encode_ts_millis_value]                [TimestampMillisecondArray] [make_ts_millis];
+    [encode_ts_micros_value]                [TimestampMicrosecondArray] [make_ts_micros];
+    [encode_ts_nanos_value]                 [TimestampNanosecondArray]  [make_ts_nanos];
+    [encode_interval_year_month_value]      [IntervalYearMonthArray]    [PgInterval::from];
+    [encode_interval_day_time_value]        [IntervalDayTimeArray]      [PgInterval::from];
+    [encode_interval_month_day_nano_value]  [IntervalMonthDayNanoArray] [PgInterval::from];
+    [encode_date32_value]                   [Date32Array]               [make_date32];
+    [encode_date64_value]                   [Date64Array]               [make_date64];
+    [encode_time32_value]                   [Time32SecondArray]         [make_time32];
+    [encode_time32_millis_value]            [Time32MillisecondArray]    [make_time32_millis];
+    [encode_time64_micros_value]            [Time64MicrosecondArray]    [make_time64_micros];
+    [encode_time64_nanos_value]             [Time64NanosecondArray]     [make_time64_nanos];
 )]
 fn fn_name(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) -> PgWireResult<()> {
     encoder.encode_field(&closure_fn(
@@ -430,20 +464,23 @@ fn fn_name(encoder: &mut DataRowEncoder, list_value: &ArrayRef) -> PgWireResult<
 }
 
 #[duplicate_item(
-    fn_name                             value_ty                    closure_fn                  collect_ty;
-    [encode_u8_list_value]              [UInt8Array]                [<i8 as NumCast>::from]     [i8];
-    [encode_u16_list_value]             [UInt16Array]               [<i16 as NumCast>::from]    [i16];
-    [encode_u64_list_value]             [UInt64Array]               [<i64 as NumCast>::from]    [i64];
-    [encode_ts_list_value]              [TimestampSecondArray]      [make_ts]                   [NaiveDateTime];
-    [encode_ts_millis_list_value]       [TimestampMillisecondArray] [make_ts_millis]            [NaiveDateTime];
-    [encode_ts_micros_list_value]       [TimestampMicrosecondArray] [make_ts_micros]            [NaiveDateTime];
-    [encode_ts_nanos_list_value]        [TimestampNanosecondArray]  [make_ts_nanos]             [NaiveDateTime];
-    [encode_date32_list_value]          [Date32Array]               [make_date32]               [NaiveDate];
-    [encode_date64_list_value]          [Date64Array]               [make_date64]               [NaiveDate];
-    [encode_time32_list_value]          [Time32SecondArray]         [make_time32]               [NaiveTime];
-    [encode_time32_millis_list_value]   [Time32MillisecondArray]    [make_time32_millis]        [NaiveTime];
-    [encode_time64_micros_list_value]   [Time64MicrosecondArray]    [make_time64_micros]        [NaiveTime];
-    [encode_time64_nanos_list_value]    [Time64NanosecondArray]     [make_time64_nanos]         [NaiveTime];
+    fn_name                                     value_ty                    closure_fn                      collect_ty;
+    [encode_u8_list_value]                      [UInt8Array]                [<i8 as NumCast>::from]         [i8];
+    [encode_u16_list_value]                     [UInt16Array]               [<i16 as NumCast>::from]        [i16];
+    [encode_u64_list_value]                     [UInt64Array]               [<i64 as NumCast>::from]        [i64];
+    [encode_ts_list_value]                      [TimestampSecondArray]      [make_ts]                       [NaiveDateTime];
+    [encode_ts_millis_list_value]               [TimestampMillisecondArray] [make_ts_millis]                [NaiveDateTime];
+    [encode_ts_micros_list_value]               [TimestampMicrosecondArray] [make_ts_micros]                [NaiveDateTime];
+    [encode_ts_nanos_list_value]                [TimestampNanosecondArray]  [make_ts_nanos]                 [NaiveDateTime];
+    [encode_interval_year_month_list_value]     [IntervalYearMonthArray]    [|v| Some(PgInterval::from(v))] [PgInterval];
+    [encode_interval_day_time_list_value]       [IntervalDayTimeArray]      [|v| Some(PgInterval::from(v))] [PgInterval];
+    [encode_interval_month_day_nano_list_value] [IntervalMonthDayNanoArray] [|v| Some(PgInterval::from(v))] [PgInterval];
+    [encode_date32_list_value]                  [Date32Array]               [make_date32]                   [NaiveDate];
+    [encode_date64_list_value]                  [Date64Array]               [make_date64]                   [NaiveDate];
+    [encode_time32_list_value]                  [Time32SecondArray]         [make_time32]                   [NaiveTime];
+    [encode_time32_millis_list_value]           [Time32MillisecondArray]    [make_time32_millis]            [NaiveTime];
+    [encode_time64_micros_list_value]           [Time64MicrosecondArray]    [make_time64_micros]            [NaiveTime];
+    [encode_time64_nanos_list_value]            [Time64NanosecondArray]     [make_time64_nanos]             [NaiveTime];
 )]
 fn fn_name(encoder: &mut DataRowEncoder, list_value: &ArrayRef) -> PgWireResult<()> {
     encoder.encode_field(

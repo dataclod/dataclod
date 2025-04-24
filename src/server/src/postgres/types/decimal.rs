@@ -1,19 +1,18 @@
 use std::error::Error;
 
-use bytes::BytesMut;
-use datafusion::arrow::datatypes::i256;
+use bytes::{BufMut, BytesMut};
 use pgwire::types::ToSqlText;
 use postgres_types::{IsNull, ToSql, Type, to_sql_checked};
 use rust_decimal::Decimal;
 
 #[derive(Debug)]
-pub(crate) struct Decimal128 {
+pub(crate) struct PgDecimal {
     num: i128,
     precision: u8,
     scale: i8,
 }
 
-impl Decimal128 {
+impl PgDecimal {
     pub fn new(num: i128, precision: u8, scale: i8) -> Self {
         Self {
             num,
@@ -23,7 +22,7 @@ impl Decimal128 {
     }
 }
 
-impl ToSql for Decimal128 {
+impl ToSql for PgDecimal {
     to_sql_checked!();
 
     fn to_sql(&self, ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>>
@@ -42,7 +41,7 @@ impl ToSql for Decimal128 {
     }
 }
 
-impl ToSqlText for Decimal128 {
+impl ToSqlText for PgDecimal {
     fn to_sql_text(
         &self, _ty: &Type, out: &mut BytesMut,
     ) -> Result<IsNull, Box<dyn Error + Sync + Send>>
@@ -50,61 +49,8 @@ impl ToSqlText for Decimal128 {
         Self: Sized,
     {
         let str = format_decimal_str(&self.num.to_string(), self.precision as usize, self.scale);
-        out.extend(str.as_bytes());
-        Ok(postgres_types::IsNull::No)
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct Decimal256 {
-    num: i256,
-    precision: u8,
-    scale: i8,
-}
-
-impl Decimal256 {
-    pub fn new(num: i256, precision: u8, scale: i8) -> Self {
-        Self {
-            num,
-            precision,
-            scale,
-        }
-    }
-}
-
-impl ToSql for Decimal256 {
-    to_sql_checked!();
-
-    fn to_sql(&self, ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
-        let num = self
-            .num
-            .to_i128()
-            .ok_or("postgres numeric type does not support i256 values")?;
-        let dec = Decimal::from(num);
-        dec.to_sql(ty, out)
-    }
-
-    fn accepts(ty: &Type) -> bool
-    where
-        Self: Sized,
-    {
-        matches!(ty, &Type::NUMERIC)
-    }
-}
-
-impl ToSqlText for Decimal256 {
-    fn to_sql_text(
-        &self, _ty: &Type, out: &mut BytesMut,
-    ) -> Result<IsNull, Box<dyn Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
-        let str = format_decimal_str(&self.num.to_string(), self.precision as usize, self.scale);
-        out.extend(str.as_bytes());
-        Ok(postgres_types::IsNull::No)
+        out.put_slice(str.as_bytes());
+        Ok(IsNull::No)
     }
 }
 
