@@ -72,7 +72,7 @@ server = { package = "dataclod-server", path = "src/server", version = "0.0.2" }
 # crates.io dependencies
 anyhow = "1.0"
 async-trait = "0.1"
-chrono = "0.4"
+chrono = "=0.4.39"
 datafusion = { version = "46", features = ["serde"] }
 datafusion-table-providers = { version = "0.4.0", features = [
   "duckdb-federation",
@@ -86,3 +86,6 @@ num-traits = "0.2"
 tikv-jemallocator = "0.6"
 tokio = { version = "1.44", features = ["full"] }
 tracing = "0.1"
+
+[patch.crates-io]
+pgwire = { git = "https://github.com/xhwhis/pgwire.git", branch = "portal-suspended" }

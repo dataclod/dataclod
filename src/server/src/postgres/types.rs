@@ -1,7 +1,9 @@
 mod decimal;
 mod interval;
 
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use datafusion::arrow::array::*;
@@ -12,7 +14,7 @@ use datafusion::scalar::ScalarValue;
 use datafusion::sql::parser::Statement;
 use decimal::PgDecimal;
 use duplicate::duplicate_item;
-use futures::{TryStreamExt, stream};
+use futures::{Stream, TryStreamExt, stream};
 use interval::PgInterval;
 use num_traits::NumCast;
 use pgwire::api::Type;
@@ -68,9 +70,9 @@ pub fn encode_parameters(portal: &Portal<Statement>) -> PgWireResult<Vec<ScalarV
         .collect()
 }
 
-pub async fn encode_dataframe<'a>(
+pub async fn encode_dataframe(
     df: DataFrame, format: &Format, _row_limit: usize,
-) -> PgWireResult<QueryResponse<'a>> {
+) -> PgWireResult<QueryResponse> {
     let schema = df.schema();
     let fields = Arc::new(encode_schema(schema, format)?);
 
@@ -105,7 +107,23 @@ pub async fn encode_dataframe<'a>(
         })
         .try_flatten();
 
-    Ok(QueryResponse::new(fields, pg_row_stream))
+    struct SyncStream<S>(S);
+
+    unsafe impl<S> Sync for SyncStream<S> {}
+
+    impl<S, T> Stream for SyncStream<S>
+    where
+        S: Stream<Item = Result<T, PgWireError>> + Send,
+    {
+        type Item = Result<T, PgWireError>;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let stream = unsafe { self.map_unchecked_mut(|s| &mut s.0) };
+            Stream::poll_next(stream, cx)
+        }
+    }
+
+    Ok(QueryResponse::new(fields, SyncStream(pg_row_stream)))
 }
 
 pub fn encode_schema(schema: &DFSchema, format: &Format) -> PgWireResult<Vec<FieldInfo>> {
