@@ -25,18 +25,14 @@ impl PgDecimal {
 impl ToSql for PgDecimal {
     to_sql_checked!();
 
-    fn to_sql(&self, ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
+    fn to_sql(
+        &self, ty: &Type, out: &mut BytesMut,
+    ) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
         let dec = Decimal::from(self.num);
         dec.to_sql(ty, out)
     }
 
-    fn accepts(ty: &Type) -> bool
-    where
-        Self: Sized,
-    {
+    fn accepts(ty: &Type) -> bool {
         matches!(ty, &Type::NUMERIC)
     }
 }
@@ -44,10 +40,7 @@ impl ToSql for PgDecimal {
 impl ToSqlText for PgDecimal {
     fn to_sql_text(
         &self, _ty: &Type, out: &mut BytesMut,
-    ) -> Result<IsNull, Box<dyn Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
+    ) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
         let str = format_decimal_str(&self.num.to_string(), self.precision as usize, self.scale);
         out.put_slice(str.as_bytes());
         Ok(IsNull::No)

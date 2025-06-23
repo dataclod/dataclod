@@ -1,8 +1,10 @@
 use std::any::Any;
 
 use datafusion::arrow::datatypes::DataType;
-use datafusion::common::{Result as DFResult, ScalarValue, not_impl_err};
-use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
+use datafusion::common::{Result as DFResult, ScalarValue};
+use datafusion::logical_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature, Volatility,
+};
 
 const DATACLOD_VERSION: &str = "PostgreSQL 14.10 on dataclod";
 
@@ -34,11 +36,7 @@ impl ScalarUDFImpl for Version {
         Ok(DataType::Utf8)
     }
 
-    fn invoke(&self, _args: &[ColumnarValue]) -> DFResult<ColumnarValue> {
-        not_impl_err!("version function does not accept arguments")
-    }
-
-    fn invoke_no_args(&self, _number_rows: usize) -> DFResult<ColumnarValue> {
+    fn invoke_with_args(&self, _args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {
         Ok(ColumnarValue::Scalar(ScalarValue::Utf8(Some(
             DATACLOD_VERSION.to_owned(),
         ))))

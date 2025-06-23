@@ -22,9 +22,9 @@ impl TableFunctionImpl for DuckDBScanUDTF {
 
         match (&exprs[0], &exprs[1], &exprs[2]) {
             (
-                Expr::Literal(ScalarValue::Utf8(Some(db_path))),
-                Expr::Literal(ScalarValue::Utf8(Some(db))),
-                Expr::Literal(ScalarValue::Utf8(Some(table))),
+                Expr::Literal(ScalarValue::Utf8(Some(db_path)), None),
+                Expr::Literal(ScalarValue::Utf8(Some(db)), None),
+                Expr::Literal(ScalarValue::Utf8(Some(table)), None),
             ) => {
                 let pool = DuckDbConnectionPool::new_file(db_path, &AccessMode::ReadOnly)
                     .map_err(|e| exec_datafusion_err!("{}", e))?;

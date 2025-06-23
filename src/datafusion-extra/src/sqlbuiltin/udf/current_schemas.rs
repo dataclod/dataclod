@@ -4,7 +4,9 @@ use std::sync::Arc;
 use datafusion::arrow::array::{ListBuilder, StringBuilder};
 use datafusion::arrow::datatypes::{DataType, Field};
 use datafusion::common::{Result as DFResult, ScalarValue, plan_err};
-use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
+use datafusion::logical_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature, Volatility,
+};
 
 pub fn create_udf() -> ScalarUDF {
     ScalarUDF::new_from_impl(CurrentSchemas {
@@ -38,8 +40,8 @@ impl ScalarUDFImpl for CurrentSchemas {
         ))))
     }
 
-    fn invoke(&self, args: &[ColumnarValue]) -> DFResult<ColumnarValue> {
-        match &args[0] {
+    fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {
+        match &args.args[0] {
             ColumnarValue::Array(_) => {
                 plan_err!("`current_schemas` expects a scalar boolean argument")
             }

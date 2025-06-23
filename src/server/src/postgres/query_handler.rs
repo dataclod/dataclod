@@ -27,7 +27,9 @@ impl SimplePostgresBackend {
 
 #[async_trait]
 impl SimpleQueryHandler for SimplePostgresBackend {
-    async fn do_query<C>(&self, _client: &mut C, query: &str) -> PgWireResult<Vec<Response>> {
+    async fn do_query<'a, C>(
+        &self, _client: &mut C, query: &str,
+    ) -> PgWireResult<Vec<Response<'a>>> {
         debug!("simple query: {}", query);
 
         let stmt =
@@ -90,9 +92,9 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
         self.query_parser.clone()
     }
 
-    async fn do_query<C>(
+    async fn do_query<'a, C>(
         &self, _client: &mut C, portal: &Portal<Self::Statement>, max_rows: usize,
-    ) -> PgWireResult<Response> {
+    ) -> PgWireResult<Response<'a>> {
         debug!("extend query: {}", portal.statement.statement);
 
         if let Statement::Statement(stmt) = &portal.statement.statement {

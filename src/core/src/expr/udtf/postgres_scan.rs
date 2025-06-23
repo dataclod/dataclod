@@ -23,9 +23,9 @@ impl TableFunctionImpl for PostgresScanUDTF {
 
         match (&exprs[0], &exprs[1], &exprs[2]) {
             (
-                Expr::Literal(ScalarValue::Utf8(Some(dsn))),
-                Expr::Literal(ScalarValue::Utf8(Some(db))),
-                Expr::Literal(ScalarValue::Utf8(Some(table))),
+                Expr::Literal(ScalarValue::Utf8(Some(dsn)), None),
+                Expr::Literal(ScalarValue::Utf8(Some(db)), None),
+                Expr::Literal(ScalarValue::Utf8(Some(table)), None),
             ) => {
                 let params = to_secret_map(HashMap::from([(
                     "connection_string".to_owned(),

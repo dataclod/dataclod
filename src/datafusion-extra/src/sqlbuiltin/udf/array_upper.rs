@@ -8,7 +8,9 @@ use datafusion::common::cast::as_list_array;
 use datafusion::common::{
     Result as DFResult, ScalarValue, not_impl_err, plan_datafusion_err, plan_err,
 };
-use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
+use datafusion::logical_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature, Volatility,
+};
 
 pub fn create_udf() -> ScalarUDF {
     ScalarUDF::new_from_impl(ArrayUpper {
@@ -38,8 +40,8 @@ impl ScalarUDFImpl for ArrayUpper {
         Ok(DataType::Int64)
     }
 
-    fn invoke(&self, args: &[ColumnarValue]) -> DFResult<ColumnarValue> {
-        match &args[0] {
+    fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {
+        match &args.args[0] {
             ColumnarValue::Array(array) => {
                 let anyarrays = as_list_array(array).map_err(|_| {
                     plan_datafusion_err!(
@@ -48,7 +50,7 @@ impl ScalarUDFImpl for ArrayUpper {
                     )
                 })?;
 
-                match &args[1] {
+                match &args.args[1] {
                     ColumnarValue::Array(_) => {
                         plan_err!("second argument of `array_upper` must be a scalar")
                     }
@@ -88,7 +90,7 @@ impl ScalarUDFImpl for ArrayUpper {
                 }
             }
             ColumnarValue::Scalar(ScalarValue::List(anyarray)) => {
-                match &args[1] {
+                match &args.args[1] {
                     ColumnarValue::Array(_) => {
                         plan_err!("second argument of `array_upper` must be a scalar")
                     }

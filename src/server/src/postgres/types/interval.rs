@@ -72,20 +72,16 @@ impl<'a> FromSql<'a> for PgInterval {
 impl ToSql for PgInterval {
     to_sql_checked!();
 
-    fn to_sql(&self, _ty: &Type, out: &mut BytesMut) -> Result<IsNull, Box<dyn Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
+    fn to_sql(
+        &self, _ty: &Type, out: &mut BytesMut,
+    ) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
         out.put_i64(self.microseconds);
         out.put_i32(self.days);
         out.put_i32(self.months);
         Ok(IsNull::No)
     }
 
-    fn accepts(ty: &Type) -> bool
-    where
-        Self: Sized,
-    {
+    fn accepts(ty: &Type) -> bool {
         matches!(ty, &Type::INTERVAL)
     }
 }
@@ -93,10 +89,7 @@ impl ToSql for PgInterval {
 impl ToSqlText for PgInterval {
     fn to_sql_text(
         &self, _ty: &Type, out: &mut BytesMut,
-    ) -> Result<IsNull, Box<dyn Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
+    ) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
         let str = self.to_string();
         out.put_slice(str.as_bytes());
         Ok(IsNull::No)

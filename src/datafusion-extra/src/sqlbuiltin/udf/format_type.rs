@@ -6,7 +6,9 @@ use datafusion::arrow::array::StringArray;
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::cast::as_int64_array;
 use datafusion::common::{Result as DFResult, ScalarValue, plan_err};
-use datafusion::logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, Volatility};
+use datafusion::logical_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature, Volatility,
+};
 
 pub fn create_udf() -> ScalarUDF {
     ScalarUDF::new_from_impl(FormatType {
@@ -39,7 +41,7 @@ impl ScalarUDFImpl for FormatType {
         Ok(DataType::Utf8)
     }
 
-    fn invoke(&self, args: &[ColumnarValue]) -> DFResult<ColumnarValue> {
+    fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {
         fn format_type(oid: i64, typemod: Option<i64>) -> String {
             if let Some(type_id) = PgTypeId::from_oid(oid as u32) {
                 let typemod_str = match type_id {
@@ -133,7 +135,7 @@ impl ScalarUDFImpl for FormatType {
             }
         }
 
-        match (&args[0], &args[1]) {
+        match (&args.args[0], &args.args[1]) {
             (ColumnarValue::Array(array1), ColumnarValue::Array(array2)) => {
                 let type_arr = as_int64_array(array1)?;
                 let typemod_arr = as_int64_array(array2)?;

@@ -23,8 +23,8 @@ impl TableFunctionImpl for SqliteScanUDTF {
 
         match (&exprs[0], &exprs[1]) {
             (
-                Expr::Literal(ScalarValue::Utf8(Some(db_path))),
-                Expr::Literal(ScalarValue::Utf8(Some(table))),
+                Expr::Literal(ScalarValue::Utf8(Some(db_path)), None),
+                Expr::Literal(ScalarValue::Utf8(Some(table)), None),
             ) => {
                 let pool = tokio::task::block_in_place(|| {
                     Handle::current().block_on(async {
