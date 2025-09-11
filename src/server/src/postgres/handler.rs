@@ -10,7 +10,7 @@ use pgwire::api::stmt::StoredStatement;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 use tracing::debug;
 
-use super::query_parser::DataClodQueryParser;
+use super::parser::DataClodQueryParser;
 use super::types::{encode_dataframe, encode_parameters, encode_schema};
 
 const DEFAULT_ROW_LIMIT: usize = 1024;

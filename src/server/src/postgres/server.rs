@@ -1,21 +1,43 @@
 use std::sync::Arc;
 
-use tokio::net::TcpListener;
+use dataclod::QueryContext;
+use pgwire::api::PgWireServerHandlers;
+use pgwire::api::auth::StartupHandler;
+use pgwire::api::query::{ExtendedQueryHandler, SimpleQueryHandler};
+use tokio::sync::Mutex;
 
-use super::handler_factory::PostgresBackendFactory;
+use super::auth::{DataClodAuthSource, DataClodParameterProvider, DataClodStartupHandler};
+use super::handler::{ExtendedPostgresBackend, SimplePostgresBackend};
 
-pub async fn server(tcp_addr: String) {
-    let factory = Arc::new(PostgresBackendFactory::new());
+pub struct PostgresBackend {
+    pub simple_handler: Arc<SimplePostgresBackend>,
+    pub extended_handler: Arc<ExtendedPostgresBackend>,
+}
 
-    let listener = TcpListener::bind(&tcp_addr)
-        .await
-        .expect("Failed to bind TCP listener");
-    loop {
-        let (incoming_socket, _) = listener.accept().await.expect("Failed to accept socket");
-        let factory_ref = factory.clone();
+impl PostgresBackend {
+    pub fn new() -> Self {
+        let ctx = Arc::new(QueryContext::new());
+        Self {
+            simple_handler: Arc::new(SimplePostgresBackend::new(ctx.clone())),
+            extended_handler: Arc::new(ExtendedPostgresBackend::new(ctx)),
+        }
+    }
+}
 
-        tokio::spawn(async move {
-            pgwire::tokio::process_socket(incoming_socket, None, factory_ref).await
-        });
+impl PgWireServerHandlers for PostgresBackend {
+    fn simple_query_handler(&self) -> Arc<impl SimpleQueryHandler> {
+        self.simple_handler.clone()
+    }
+
+    fn extended_query_handler(&self) -> Arc<impl ExtendedQueryHandler> {
+        self.extended_handler.clone()
+    }
+
+    fn startup_handler(&self) -> Arc<impl StartupHandler> {
+        Arc::new(DataClodStartupHandler {
+            auth_source: Arc::new(DataClodAuthSource),
+            parameter_provider: Arc::new(DataClodParameterProvider),
+            cached_password: Mutex::new(vec![]),
+        })
     }
 }
