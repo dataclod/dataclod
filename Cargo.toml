@@ -85,3 +85,5 @@ num-traits = "0.2"
 tikv-jemallocator = "0.6"
 tokio = { version = "1.47", features = ["full"] }
 tracing = "0.1"
+sqllogictest = "0.23"
+postgres = "0.19"

@@ -18,3 +18,7 @@ datafusion-extra.workspace = true
 datafusion-table-providers.workspace = true
 duckdb.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+sqllogictest.workspace = true
+postgres.workspace = true

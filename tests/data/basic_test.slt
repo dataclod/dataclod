@@ -1,0 +1,97 @@
+# Basic SQL Logic Tests for DataClod
+
+# Test basic SELECT statements
+statement ok
+CREATE TABLE test_table (id INTEGER, name TEXT, value DECIMAL);
+
+statement ok
+INSERT INTO test_table VALUES (1, 'Alice', 100.5), (2, 'Bob', 200.75), (3, 'Charlie', 300.25);
+
+# Test simple SELECT
+query I
+SELECT id FROM test_table;
+----
+1
+2
+3
+
+# Test SELECT with WHERE clause
+query IT
+SELECT id, name FROM test_table WHERE id > 1;
+----
+2 Bob
+3 Charlie
+
+# Test SELECT with ORDER BY
+query IT
+SELECT id, name FROM test_table ORDER BY name;
+----
+1 Alice
+2 Bob
+3 Charlie
+
+# Test aggregation
+query R
+SELECT AVG(value) FROM test_table;
+----
+200.5
+
+# Test GROUP BY
+query I R
+SELECT id, SUM(value) FROM test_table GROUP BY id ORDER BY id;
+----
+1 100.5
+2 200.75
+3 300.25
+
+# Test JOIN operations
+statement ok
+CREATE TABLE test_table2 (id INTEGER, parent_id INTEGER, score INTEGER);
+
+statement ok
+INSERT INTO test_table2 VALUES (10, 1, 85), (20, 2, 90), (30, 3, 95);
+
+query IT I
+SELECT t1.name, t1.id, t2.score FROM test_table t1 JOIN test_table2 t2 ON t1.id = t2.parent_id ORDER BY t1.id;
+----
+Alice 1 85
+Bob 2 90
+Charlie 3 95
+
+# Test subqueries
+query T
+SELECT name FROM test_table WHERE id IN (SELECT parent_id FROM test_table2 WHERE score > 85);
+----
+Bob
+Charlie
+
+# Test LIMIT
+query IT
+SELECT id, name FROM test_table LIMIT 2;
+----
+1 Alice
+2 Bob
+
+# Test mathematical functions
+query R
+SELECT value * 1.1 FROM test_table WHERE id = 1;
+----
+110.55
+
+# Test string functions
+query T
+SELECT UPPER(name) FROM test_table WHERE id = 1;
+----
+ALICE
+
+# Test date functions (if supported)
+# query T
+# SELECT CURRENT_DATE;
+# ----
+
+# Clean up
+statement ok
+DROP TABLE test_table2;
+
+statement ok
+DROP TABLE test_table;
