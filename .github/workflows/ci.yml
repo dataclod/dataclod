@@ -32,6 +32,9 @@ jobs:
           sudo apt update
           sudo apt install -y libgeos-dev
 
+      - name: cargo machete
+        uses: bnjbvr/cargo-machete@main
+
       - name: spell check
         uses: crate-ci/typos@v1
 
@@ -70,4 +73,4 @@ jobs:
         run: cargo build --workspace --all-targets --all-features
 
       # - name: cargo nextest
-        # run: cargo nextest run --workspace --all-targets --all-features
+      # run: cargo nextest run --workspace --all-targets --all-features
