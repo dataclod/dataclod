@@ -68,9 +68,9 @@ pub fn encode_parameters(portal: &Portal<Statement>) -> PgWireResult<Vec<ScalarV
         .collect()
 }
 
-pub async fn encode_dataframe<'a>(
+pub async fn encode_dataframe(
     df: DataFrame, format: &Format, _row_limit: usize,
-) -> PgWireResult<QueryResponse<'a>> {
+) -> PgWireResult<QueryResponse> {
     let schema = df.schema();
     let fields = Arc::new(encode_schema(schema, format)?);
 

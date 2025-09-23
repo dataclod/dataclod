@@ -16,4 +16,8 @@ anyhow.workspace = true
 async-trait.workspace = true
 common-utils.workspace = true
 datafusion.workspace = true
-geos = "10.0.0"
+geos = { git = "https://github.com/georust/geos.git", rev = "47afbad2483e489911ddb456417808340e9342c3", features = [
+  "v3_13_0",
+] }
+libc = "0.2"
+proj4rs = "0.1.9"

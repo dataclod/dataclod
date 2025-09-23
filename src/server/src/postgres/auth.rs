@@ -99,6 +99,7 @@ impl ServerParameterProvider for DataClodParameterProvider {
     }
 }
 
+#[derive(Debug)]
 pub struct DataClodAuthSource;
 
 #[async_trait]

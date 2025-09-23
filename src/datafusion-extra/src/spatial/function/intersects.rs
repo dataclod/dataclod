@@ -7,9 +7,11 @@ use datafusion::common::{Result as DFResult, ScalarValue, exec_err};
 use datafusion::logical_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature, Volatility,
 };
-use geos::{Geom, Geometry};
+use geos::Geometry;
 
-pub fn intersects() -> ScalarUDF {
+use super::geos_ext::GeosExt;
+
+pub fn st_intersects() -> ScalarUDF {
     ScalarUDF::new_from_impl(IntersectsUDF {
         signature: Signature::exact(
             vec![DataType::Binary, DataType::Binary],
@@ -18,7 +20,7 @@ pub fn intersects() -> ScalarUDF {
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct IntersectsUDF {
     signature: Signature,
 }
@@ -75,7 +77,7 @@ impl ScalarUDFImpl for IntersectsUDF {
                         match opt {
                             (Some(wkb1), Some(wkb2)) => {
                                 match (Geometry::new_from_wkb(wkb1), Geometry::new_from_wkb(wkb2)) {
-                                    (Ok(geom1), Ok(geom2)) => geom1.intersects(&geom2).ok(),
+                                    (Ok(geom1), Ok(geom2)) => geom1.st_intersects(&geom2),
                                     _ => None,
                                 }
                             }
@@ -101,8 +103,8 @@ impl ScalarUDFImpl for IntersectsUDF {
                                     .map(|opt| {
                                         opt.and_then(|wkb1| {
                                             Geometry::new_from_wkb(wkb1)
-                                                .and_then(|geom1| geom1.intersects(&geom2))
                                                 .ok()
+                                                .and_then(|geom1| geom1.st_intersects(&geom2))
                                         })
                                     })
                                     .collect();
@@ -130,8 +132,8 @@ impl ScalarUDFImpl for IntersectsUDF {
                                     .map(|opt| {
                                         opt.and_then(|wkb2| {
                                             Geometry::new_from_wkb(wkb2)
-                                                .and_then(|geom2| geom1.intersects(&geom2))
                                                 .ok()
+                                                .and_then(|geom2| geom1.st_intersects(&geom2))
                                         })
                                     })
                                     .collect();
@@ -151,7 +153,7 @@ impl ScalarUDFImpl for IntersectsUDF {
                 let result = match (wkb_opt1, wkb_opt2) {
                     (Some(wkb1), Some(wkb2)) => {
                         match (Geometry::new_from_wkb(wkb1), Geometry::new_from_wkb(wkb2)) {
-                            (Ok(geom1), Ok(geom2)) => geom1.intersects(&geom2).ok(),
+                            (Ok(geom1), Ok(geom2)) => geom1.st_intersects(&geom2),
                             _ => None,
                         }
                     }

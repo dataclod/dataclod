@@ -72,14 +72,14 @@ server = { package = "dataclod-server", path = "src/server", version = "0.0.2" }
 anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
-datafusion = { version = "49", features = ["serde"] }
-datafusion-table-providers = { version = "0.7.0", features = [
+datafusion = { version = "50", features = ["serde"] }
+datafusion-table-providers = { version = "0.8.0", features = [
   "duckdb-federation",
   "mysql-federation",
   "postgres-federation",
   "sqlite-federation",
 ] }
-duckdb = { version = "1.3.0", package = "spiceai_duckdb_fork" }
+duckdb = { version = "1.3.1", package = "spiceai_duckdb_fork" }
 futures = "0.3"
 num-traits = "0.2"
 tikv-jemallocator = "0.6"

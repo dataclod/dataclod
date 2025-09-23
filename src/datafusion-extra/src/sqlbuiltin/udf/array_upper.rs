@@ -18,7 +18,7 @@ pub fn create_udf() -> ScalarUDF {
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct ArrayUpper {
     signature: Signature,
 }
