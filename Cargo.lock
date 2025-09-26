@@ -1102,6 +1102,7 @@ dependencies = [
  "datafusion",
  "datafusion-extra",
  "datafusion-table-providers",
+ "parking_lot",
  "spiceai_duckdb_fork",
  "tokio",
 ]

@@ -17,4 +17,5 @@ datafusion.workspace = true
 datafusion-extra.workspace = true
 datafusion-table-providers.workspace = true
 duckdb.workspace = true
+parking_lot.workspace = true
 tokio.workspace = true

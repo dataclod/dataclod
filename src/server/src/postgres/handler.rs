@@ -68,14 +68,14 @@ impl SimpleQueryHandler for SimplePostgresBackend {
 }
 
 pub struct ExtendedPostgresBackend {
-    pub session_context: Arc<QueryContext>,
+    pub query_context: Arc<QueryContext>,
     pub query_parser: Arc<DataClodQueryParser>,
 }
 
 impl ExtendedPostgresBackend {
     pub fn new(session_context: Arc<QueryContext>) -> Self {
         Self {
-            session_context,
+            query_context: session_context,
             query_parser: Arc::new(DataClodQueryParser),
         }
     }
@@ -111,7 +111,7 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
         }
 
         let df = self
-            .session_context
+            .query_context
             .sql(&portal.statement.statement.to_string())
             .await
             .map_err(|e| PgWireError::ApiError(e.into()))?;
@@ -136,8 +136,7 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
         debug!("describe statement: {}", stmt.statement);
 
         let plan = self
-            .session_context
-            .state()
+            .query_context
             .statement_to_plan(stmt.statement.clone())
             .await
             .map_err(|e| {
@@ -160,8 +159,7 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
         debug!("describe portal: {}", portal.statement.statement);
 
         let plan = self
-            .session_context
-            .state()
+            .query_context
             .statement_to_plan(portal.statement.statement.clone())
             .await
             .map_err(|e| {
