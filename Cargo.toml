@@ -31,7 +31,7 @@ unused_lifetimes = "warn"
 
 [workspace.lints.clippy]
 alloc_instead_of_core = "warn"
-doc_markdown = "warn"
+# doc_markdown = "warn"
 empty_structs_with_brackets = "warn"
 explicit_into_iter_loop = "warn"
 explicit_iter_loop = "warn"

@@ -2,9 +2,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use datafusion::dataframe::DataFrame;
+use datafusion::execution::SessionStateBuilder;
 use datafusion::execution::context::{SessionConfig, SessionContext};
 use datafusion::logical_expr::{LogicalPlan, LogicalPlanBuilder, Statement};
 use datafusion::sql::parser::Statement as SqlStatement;
+use datafusion_extra::spatial::{SpatialJoinOptions, register_spatial_join_optimizer};
 use parking_lot::RwLock;
 
 use crate::rewrite::StatementRewrite;
@@ -29,7 +31,13 @@ impl QueryContext {
             "datafusion.execution.skip_physical_aggregate_schema_check",
             true,
         );
-        let ctx = SessionContext::new_with_config(config);
+        let state_builder = SessionStateBuilder::new()
+            .with_config(config)
+            .with_default_features();
+        let state_builder =
+            register_spatial_join_optimizer(state_builder, SpatialJoinOptions::default());
+        let state = state_builder.build();
+        let ctx = SessionContext::new_with_state(state);
         datafusion_extra::catalog::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");
         datafusion_extra::sqlbuiltin::register_udf(&ctx);
         datafusion_extra::spatial::register_spatial_udfs(&ctx);
