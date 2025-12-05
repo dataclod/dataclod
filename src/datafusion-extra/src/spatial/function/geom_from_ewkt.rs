@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use datafusion::arrow::array::{Array, BinaryArray, StringArray};
+use datafusion::arrow::array::{AsArray, BinaryArray};
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::{Result as DFResult, ScalarValue, exec_err};
 use datafusion::logical_expr::{
@@ -12,19 +12,19 @@ use geos::Geometry;
 use super::geos_ext::GeosExt;
 
 pub fn st_geomfromewkt() -> ScalarUDF {
-    ScalarUDF::new_from_impl(GeomFromEWKTUDF {
-        signature: Signature::exact(vec![DataType::Utf8], Volatility::Immutable),
+    ScalarUDF::new_from_impl(GeomFromEWKTUdf {
+        signature: Signature::user_defined(Volatility::Immutable),
         aliases: vec!["st_geomfromewkt".to_owned()],
     })
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct GeomFromEWKTUDF {
+struct GeomFromEWKTUdf {
     signature: Signature,
     aliases: Vec<String>,
 }
 
-impl ScalarUDFImpl for GeomFromEWKTUDF {
+impl ScalarUDFImpl for GeomFromEWKTUdf {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -56,7 +56,7 @@ impl ScalarUDFImpl for GeomFromEWKTUDF {
 
         match &args[0] {
             ColumnarValue::Array(arr) => {
-                let ewkt_arr: &StringArray = arr.as_any().downcast_ref().unwrap();
+                let ewkt_arr = arr.as_string::<i32>();
                 let result: BinaryArray = ewkt_arr
                     .iter()
                     .map(|opt| {
@@ -87,5 +87,22 @@ impl ScalarUDFImpl for GeomFromEWKTUDF {
 
     fn aliases(&self) -> &[String] {
         &self.aliases
+    }
+
+    fn coerce_types(&self, arg_types: &[DataType]) -> DFResult<Vec<DataType>> {
+        if arg_types.len() != 1 {
+            return exec_err!("invalid number of arguments for udf {}", self.name());
+        }
+        if !matches!(
+            arg_types[0],
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View
+        ) {
+            return exec_err!(
+                "unsupported data type '{}' for udf {}",
+                arg_types[0],
+                self.name()
+            );
+        }
+        Ok(vec![DataType::Utf8])
     }
 }

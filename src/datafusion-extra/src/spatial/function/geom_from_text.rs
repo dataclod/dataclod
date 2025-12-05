@@ -1,37 +1,30 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use datafusion::arrow::array::{Array, BinaryArray, Int64Array, StringArray, new_null_array};
-use datafusion::arrow::datatypes::DataType;
+use datafusion::arrow::array::{Array, AsArray, BinaryArray, new_null_array};
+use datafusion::arrow::datatypes::{DataType, Int64Type};
 use datafusion::common::{Result as DFResult, ScalarValue, exec_err};
 use datafusion::logical_expr::{
-    ColumnarValue, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature, TypeSignature,
-    Volatility,
+    ColumnarValue, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature, Volatility,
 };
 use geos::Geometry;
 
 use super::geos_ext::GeosExt;
 
 pub fn st_geomfromtext() -> ScalarUDF {
-    ScalarUDF::new_from_impl(GeomFromTextUDF {
-        signature: Signature::one_of(
-            vec![
-                TypeSignature::Exact(vec![DataType::Utf8]),
-                TypeSignature::Exact(vec![DataType::Utf8, DataType::Int64]),
-            ],
-            Volatility::Immutable,
-        ),
+    ScalarUDF::new_from_impl(GeomFromTextUdf {
+        signature: Signature::user_defined(Volatility::Immutable),
         aliases: vec!["st_geomfromtext".to_owned()],
     })
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct GeomFromTextUDF {
+struct GeomFromTextUdf {
     signature: Signature,
     aliases: Vec<String>,
 }
 
-impl ScalarUDFImpl for GeomFromTextUDF {
+impl ScalarUDFImpl for GeomFromTextUdf {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -71,7 +64,7 @@ impl ScalarUDFImpl for GeomFromTextUDF {
         if args.len() == 1 {
             match &args[0] {
                 ColumnarValue::Array(arr) => {
-                    let wkt_arr: &StringArray = arr.as_any().downcast_ref().unwrap();
+                    let wkt_arr = arr.as_string::<i32>();
                     let result: BinaryArray = wkt_arr
                         .iter()
                         .map(|opt| {
@@ -101,8 +94,8 @@ impl ScalarUDFImpl for GeomFromTextUDF {
         } else {
             match (&args[0], &args[1]) {
                 (ColumnarValue::Array(wkt_arr), ColumnarValue::Array(srid_arr)) => {
-                    let wkt_arr: &StringArray = wkt_arr.as_any().downcast_ref().unwrap();
-                    let srid_arr: &Int64Array = srid_arr.as_any().downcast_ref().unwrap();
+                    let wkt_arr = wkt_arr.as_string::<i32>();
+                    let srid_arr = srid_arr.as_primitive::<Int64Type>();
 
                     let result: BinaryArray = wkt_arr
                         .iter()
@@ -135,7 +128,7 @@ impl ScalarUDFImpl for GeomFromTextUDF {
                 ) => {
                     let result = match srid_opt {
                         Some(srid) => {
-                            let wkt_arr: &StringArray = wkt_arr.as_any().downcast_ref().unwrap();
+                            let wkt_arr = wkt_arr.as_string::<i32>();
                             let result: BinaryArray = wkt_arr
                                 .iter()
                                 .map(|opt| {
@@ -152,7 +145,7 @@ impl ScalarUDFImpl for GeomFromTextUDF {
                             Arc::new(result)
                         }
                         None => {
-                            let wkt_arr: &StringArray = wkt_arr.as_any().downcast_ref().unwrap();
+                            let wkt_arr = wkt_arr.as_string::<i32>();
                             let result: BinaryArray = wkt_arr
                                 .iter()
                                 .map(|opt| {
@@ -174,7 +167,7 @@ impl ScalarUDFImpl for GeomFromTextUDF {
                 ) => {
                     let result = match wkt_opt {
                         Some(wkt) => {
-                            let srid_arr: &Int64Array = srid_arr.as_any().downcast_ref().unwrap();
+                            let srid_arr = srid_arr.as_primitive::<Int64Type>();
                             let result: BinaryArray = srid_arr
                                 .iter()
                                 .map(|opt| {
@@ -233,5 +226,47 @@ impl ScalarUDFImpl for GeomFromTextUDF {
 
     fn aliases(&self) -> &[String] {
         &self.aliases
+    }
+
+    fn coerce_types(&self, arg_types: &[DataType]) -> DFResult<Vec<DataType>> {
+        let len = arg_types.len();
+        if !(1..=2).contains(&len) {
+            return exec_err!("invalid number of arguments for udf {}", self.name());
+        }
+        if !matches!(
+            arg_types[0],
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View
+        ) {
+            return exec_err!(
+                "unsupported data type '{}' for udf {}",
+                arg_types[0],
+                self.name()
+            );
+        }
+        if len == 1 {
+            Ok(vec![DataType::Utf8])
+        } else {
+            if !matches!(
+                arg_types[1],
+                DataType::Int8
+                    | DataType::Int16
+                    | DataType::Int32
+                    | DataType::Int64
+                    | DataType::UInt8
+                    | DataType::UInt16
+                    | DataType::UInt32
+                    | DataType::UInt64
+                    | DataType::Float16
+                    | DataType::Float32
+                    | DataType::Float64
+            ) {
+                return exec_err!(
+                    "unsupported data type '{}' for udf {}",
+                    arg_types[1],
+                    self.name()
+                );
+            }
+            Ok(vec![DataType::Utf8, DataType::Int64])
+        }
     }
 }

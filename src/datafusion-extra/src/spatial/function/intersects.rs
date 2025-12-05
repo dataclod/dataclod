@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use datafusion::arrow::array::{Array, BinaryArray, BooleanArray, new_null_array};
+use datafusion::arrow::array::{Array, AsArray, BooleanArray, new_null_array};
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::{Result as DFResult, ScalarValue, exec_err};
 use datafusion::logical_expr::{
@@ -12,20 +12,19 @@ use geos::Geometry;
 use super::geos_ext::GeosExt;
 
 pub fn st_intersects() -> ScalarUDF {
-    ScalarUDF::new_from_impl(IntersectsUDF {
-        signature: Signature::exact(
-            vec![DataType::Binary, DataType::Binary],
-            Volatility::Immutable,
-        ),
+    ScalarUDF::new_from_impl(IntersectsUdf {
+        signature: Signature::user_defined(Volatility::Immutable),
+        aliases: vec!["st_intersects".to_owned()],
     })
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct IntersectsUDF {
+struct IntersectsUdf {
     signature: Signature,
+    aliases: Vec<String>,
 }
 
-impl ScalarUDFImpl for IntersectsUDF {
+impl ScalarUDFImpl for IntersectsUdf {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -64,8 +63,8 @@ impl ScalarUDFImpl for IntersectsUDF {
 
         match (&args[0], &args[1]) {
             (ColumnarValue::Array(wkb_arr1), ColumnarValue::Array(wkb_arr2)) => {
-                let wkb_arr1: &BinaryArray = wkb_arr1.as_any().downcast_ref().unwrap();
-                let wkb_arr2: &BinaryArray = wkb_arr2.as_any().downcast_ref().unwrap();
+                let wkb_arr1 = wkb_arr1.as_binary::<i32>();
+                let wkb_arr2 = wkb_arr2.as_binary::<i32>();
                 if wkb_arr1.len() != wkb_arr2.len() {
                     return exec_err!("array length mismatch for udf {}", self.name());
                 }
@@ -96,8 +95,7 @@ impl ScalarUDFImpl for IntersectsUDF {
                     Some(wkb2) => {
                         match Geometry::new_from_wkb(wkb2) {
                             Ok(geom2) => {
-                                let wkb_arr1: &BinaryArray =
-                                    wkb_arr1.as_any().downcast_ref().unwrap();
+                                let wkb_arr1 = wkb_arr1.as_binary::<i32>();
                                 let result: BooleanArray = wkb_arr1
                                     .iter()
                                     .map(|opt| {
@@ -125,8 +123,7 @@ impl ScalarUDFImpl for IntersectsUDF {
                     Some(wkb1) => {
                         match Geometry::new_from_wkb(wkb1) {
                             Ok(geom1) => {
-                                let wkb_arr2: &BinaryArray =
-                                    wkb_arr2.as_any().downcast_ref().unwrap();
+                                let wkb_arr2 = wkb_arr2.as_binary::<i32>();
                                 let result: BooleanArray = wkb_arr2
                                     .iter()
                                     .map(|opt| {
@@ -166,5 +163,36 @@ impl ScalarUDFImpl for IntersectsUDF {
                 exec_err!("unsupported data type '{other:?}' for udf {}", self.name())
             }
         }
+    }
+
+    fn aliases(&self) -> &[String] {
+        &self.aliases
+    }
+
+    fn coerce_types(&self, arg_types: &[DataType]) -> DFResult<Vec<DataType>> {
+        if arg_types.len() != 2 {
+            return exec_err!("invalid number of arguments for udf {}", self.name());
+        }
+        if !matches!(
+            arg_types[0],
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView
+        ) {
+            return exec_err!(
+                "unsupported data type '{}' for udf {}",
+                arg_types[0],
+                self.name()
+            );
+        }
+        if !matches!(
+            arg_types[1],
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView
+        ) {
+            return exec_err!(
+                "unsupported data type '{}' for udf {}",
+                arg_types[1],
+                self.name()
+            );
+        }
+        Ok(vec![DataType::Binary, DataType::Binary])
     }
 }
