@@ -1,17 +1,20 @@
 use core::fmt;
+use std::mem::transmute;
 use std::sync::Arc;
 
 use datafusion::arrow::array::{ArrayRef, AsArray, Float64Array, RecordBatch};
+use datafusion::common::utils::proxy::VecAllocExt;
 use datafusion::common::{DataFusionError, JoinSide, Result, ScalarValue};
 use datafusion::logical_expr::ColumnarValue;
 use datafusion::physical_expr::PhysicalExpr;
 use geo::{BoundingRect, Contains, Distance, Euclidean, Intersects, Relate, Within};
 use geo_traits::to_geo::ToGeoGeometry;
 use geo_types::Rect;
-use geozero::ToGeo;
+use geos::{Geom, PreparedGeometry};
 use wkb::reader::Wkb;
 
 use crate::spatial::join::option::SpatialJoinOptions;
+use crate::spatial::join::prep_geom_array::OwnedPreparedGeometry;
 
 /// Spatial predicate is the join condition of a spatial join. It can be a
 /// distance predicate or a relation predicate.
@@ -233,7 +236,7 @@ impl DistancePredicateEvaluator {
 }
 
 /// Result of evaluating a geometry batch.
-pub struct GeometryBatchResult {
+pub struct EvaluatedGeometryArray {
     /// The array of geometries produced by evaluating the geometry expression.
     pub geometry_array: ArrayRef,
     /// The rects of the geometries in the geometry array. Each geometry could
@@ -243,19 +246,87 @@ pub struct GeometryBatchResult {
     pub rects: Vec<(usize, Rect)>,
     /// The distance value produced by evaluating the distance expression.
     pub distance: Option<ColumnarValue>,
+    /// WKBs of the geometries in `wkb_array`. The wkb values reference buffers
+    /// inside the geometry array, but we'll only allow accessing Wkb<'a>
+    /// where 'a is the lifetime of the GeometryBatchResult to make
+    /// the interfaces safe. The buffers in `wkb_array` are allocated on the
+    /// heap and won't be moved when the GeometryBatchResult is moved, so we
+    /// don't need to worry about pinning.
+    wkbs: Vec<Option<Wkb<'static>>>,
+}
+
+impl EvaluatedGeometryArray {
+    pub fn try_new(geometry_array: ArrayRef) -> Self {
+        let num_rows = geometry_array.len();
+        let mut rect_vec = Vec::with_capacity(num_rows);
+        let mut wkbs = Vec::with_capacity(num_rows);
+        let wkb_array = geometry_array.as_binary::<i32>();
+        wkb_array.iter().enumerate().for_each(|(idx, wkb_opt)| {
+            let wkb_opt = wkb_opt.and_then(|wkb| Wkb::try_new(wkb).ok());
+            if let Some(wkb) = wkb_opt.as_ref() {
+                let geo = wkb.to_geometry();
+                if let Some(rect) = geo.bounding_rect() {
+                    rect_vec.push((idx, rect));
+                }
+            }
+            wkbs.push(wkb_opt);
+        });
+
+        // Safety: The wkbs must reference buffers inside the `wkb_array`.
+        let wkbs = wkbs
+            .into_iter()
+            .map(|wkb| wkb.map(|wkb| unsafe { transmute(wkb) }))
+            .collect();
+        Self {
+            geometry_array,
+            rects: rect_vec,
+            distance: None,
+            wkbs,
+        }
+    }
+
+    /// Get the WKBs of the geometries in the geometry array.
+    pub fn wkbs(&self) -> &Vec<Option<Wkb<'_>>> {
+        // The returned WKBs are guaranteed to be valid for the lifetime of the
+        // GeometryBatchResult, because the WKBs reference buffers inside
+        // `geometry_array`, which is guaranteed to be valid for the lifetime of
+        // the GeometryBatchResult. We shorten the lifetime of the WKBs from 'static
+        // to '_, so that the caller can use the WKBs without worrying about the
+        // lifetime.
+        &self.wkbs
+    }
+
+    pub fn in_mem_size(&self) -> usize {
+        let distance_in_mem_size = match &self.distance {
+            Some(ColumnarValue::Array(array)) => array.get_array_memory_size(),
+            _ => 8,
+        };
+
+        // Note: this is not an accurate, because wkbs has inner Vecs. However, the size
+        // of inner vecs should be small, so the inaccuracy does not matter too
+        // much.
+        let wkb_vec_size = self.wkbs.allocated_size();
+
+        // We do not take wkb_array into consideration, since it is a reference to some
+        // of the columns of the geometry_array.
+        self.geometry_array.get_array_memory_size()
+            + self.rects.allocated_size()
+            + distance_in_mem_size
+            + wkb_vec_size
+    }
 }
 
 /// Spatial predicate evaluator is the evaluator for a spatial predicate. It can
 /// be a distance predicate evaluator or a relation predicate evaluator.
 pub trait SpatialPredicateEvaluator: fmt::Debug + Send + Sync {
     /// Evaluate the spatial predicate on the build side.
-    fn evaluate_build(&self, batch: &RecordBatch) -> Result<GeometryBatchResult> {
+    fn evaluate_build(&self, batch: &RecordBatch) -> Result<EvaluatedGeometryArray> {
         let geom_expr = self.build_side_expr()?;
         evaluate_with_rects(batch, &geom_expr)
     }
 
     /// Evaluate the spatial predicate on the probe side.
-    fn evaluate_probe(&self, batch: &RecordBatch) -> Result<GeometryBatchResult> {
+    fn evaluate_probe(&self, batch: &RecordBatch) -> Result<EvaluatedGeometryArray> {
         let geom_expr = self.probe_side_expr()?;
         evaluate_with_rects(batch, &geom_expr)
     }
@@ -273,6 +344,18 @@ pub trait SpatialPredicateEvaluator: fmt::Debug + Send + Sync {
     /// value.
     fn evaluate_predicate(&self, build: &Wkb, probe: &Wkb, distance: Option<f64>) -> Result<bool>;
 
+    /// Evaluate the spatial predicate given the prepared geometry values and
+    /// distance value.
+    fn evaluate_predicate_prepare_left(
+        &self, build: &OwnedPreparedGeometry, probe: &geos::Geometry, distance: Option<f64>,
+    ) -> Result<bool>;
+
+    /// Evaluate the spatial predicate given the prepared geometry values and
+    /// distance value.
+    fn evaluate_predicate_prepare_right(
+        &self, build: &geos::Geometry, probe: &OwnedPreparedGeometry, distance: Option<f64>,
+    ) -> Result<bool>;
+
     /// Get the expression for the build side.
     fn build_side_expr(&self) -> Result<Arc<dyn PhysicalExpr>>;
 
@@ -282,32 +365,18 @@ pub trait SpatialPredicateEvaluator: fmt::Debug + Send + Sync {
 
 fn evaluate_with_rects(
     batch: &RecordBatch, geom_expr: &Arc<dyn PhysicalExpr>,
-) -> Result<GeometryBatchResult> {
+) -> Result<EvaluatedGeometryArray> {
     let geometry_columnar_value = geom_expr.evaluate(batch)?;
     let num_rows = batch.num_rows();
     let geometry_array = geometry_columnar_value.to_array(num_rows)?;
 
-    let mut rect_vec = Vec::with_capacity(num_rows);
-    let wkb_array = geometry_array.as_binary::<i32>();
-    wkb_array.iter().enumerate().for_each(|(idx, wkb_opt)| {
-        if let Some(wkb) = wkb_opt
-            && let Ok(geo) = geozero::wkb::Ewkb(wkb).to_geo()
-            && let Some(rect) = geo.bounding_rect()
-        {
-            rect_vec.push((idx, rect));
-        }
-    });
-    Ok(GeometryBatchResult {
-        geometry_array,
-        rects: rect_vec,
-        distance: None,
-    })
+    Ok(EvaluatedGeometryArray::try_new(geometry_array))
 }
 
 impl DistancePredicateEvaluator {
     fn evaluate_with_rects(
         &self, batch: &RecordBatch, geom_expr: &Arc<dyn PhysicalExpr>, side: JoinSide,
-    ) -> Result<GeometryBatchResult> {
+    ) -> Result<EvaluatedGeometryArray> {
         let mut result = evaluate_with_rects(batch, geom_expr)?;
 
         let should_expand = match side {
@@ -373,12 +442,12 @@ fn expand_rect_in_place(rect: &mut Rect, distance: f64) {
 }
 
 impl SpatialPredicateEvaluator for DistancePredicateEvaluator {
-    fn evaluate_build(&self, batch: &RecordBatch) -> Result<GeometryBatchResult> {
+    fn evaluate_build(&self, batch: &RecordBatch) -> Result<EvaluatedGeometryArray> {
         let geom_expr = self.build_side_expr()?;
         self.evaluate_with_rects(batch, &geom_expr, JoinSide::Left)
     }
 
-    fn evaluate_probe(&self, batch: &RecordBatch) -> Result<GeometryBatchResult> {
+    fn evaluate_probe(&self, batch: &RecordBatch) -> Result<EvaluatedGeometryArray> {
         let geom_expr = self.probe_side_expr()?;
         self.evaluate_with_rects(batch, &geom_expr, JoinSide::Right)
     }
@@ -434,6 +503,38 @@ impl SpatialPredicateEvaluator for DistancePredicateEvaluator {
         let dist = euc.distance(&geom, &probe.to_geometry());
         Ok(dist <= distance)
     }
+
+    /// Evaluate the spatial predicate given the prepared geometry values and
+    /// distance value.
+    fn evaluate_predicate_prepare_left(
+        &self, build: &OwnedPreparedGeometry, probe: &geos::Geometry, distance: Option<f64>,
+    ) -> Result<bool> {
+        let Some(distance) = distance else {
+            return Ok(false);
+        };
+
+        let build_geom = build.geometry();
+        let dist = build_geom
+            .distance(probe)
+            .map_err(|e| DataFusionError::External(Box::new(e)))?;
+        Ok(dist <= distance)
+    }
+
+    /// Evaluate the spatial predicate given the prepared geometry values and
+    /// distance value.
+    fn evaluate_predicate_prepare_right(
+        &self, build: &geos::Geometry, probe: &OwnedPreparedGeometry, distance: Option<f64>,
+    ) -> Result<bool> {
+        let Some(distance) = distance else {
+            return Ok(false);
+        };
+
+        let probe_geom = probe.geometry();
+        let dist = build
+            .distance(probe_geom)
+            .map_err(|e| DataFusionError::External(Box::new(e)))?;
+        Ok(dist <= distance)
+    }
 }
 
 impl SpatialPredicateEvaluator for RelationPredicateEvaluator {
@@ -448,11 +549,37 @@ impl SpatialPredicateEvaluator for RelationPredicateEvaluator {
     fn evaluate_predicate(&self, build: &Wkb, probe: &Wkb, _distance: Option<f64>) -> Result<bool> {
         Ok(self.relation_evaluator.evaluate(build, probe))
     }
+
+    fn evaluate_predicate_prepare_left(
+        &self, build: &OwnedPreparedGeometry, probe: &geos::Geometry, _distance: Option<f64>,
+    ) -> Result<bool> {
+        let prepared = build.prepared().lock();
+        self.relation_evaluator
+            .evaluate_prepare_left(&prepared, probe)
+    }
+
+    fn evaluate_predicate_prepare_right(
+        &self, build: &geos::Geometry, probe: &OwnedPreparedGeometry, _distance: Option<f64>,
+    ) -> Result<bool> {
+        let prepared = probe.prepared().lock();
+        self.relation_evaluator
+            .evaluate_prepare_right(build, &prepared)
+    }
 }
 
 pub trait RelationEvaluator: fmt::Debug + Send + Sync {
     /// Evaluate the spatial predicate when both sides are not prepared.
     fn evaluate(&self, build: &Wkb, probe: &Wkb) -> bool;
+
+    /// Evaluate the spatial predicate when the build side is prepared.
+    fn evaluate_prepare_left(
+        &self, build: &PreparedGeometry<'_>, probe: &geos::Geometry,
+    ) -> Result<bool>;
+
+    /// Evaluate the spatial predicate when the probe side is prepared.
+    fn evaluate_prepare_right(
+        &self, build: &geos::Geometry, probe: &PreparedGeometry<'_>,
+    ) -> Result<bool>;
 }
 
 #[derive(Debug)]
@@ -460,7 +587,25 @@ pub struct IntersectsEvaluator;
 
 impl RelationEvaluator for IntersectsEvaluator {
     fn evaluate(&self, build: &Wkb, probe: &Wkb) -> bool {
-        build.to_geometry().intersects(&probe.to_geometry())
+        let build_geom = build.to_geometry();
+        let probe_geom = probe.to_geometry();
+        build_geom.intersects(&probe_geom)
+    }
+
+    fn evaluate_prepare_left(
+        &self, build: &PreparedGeometry<'_>, probe: &geos::Geometry,
+    ) -> Result<bool> {
+        build
+            .intersects(probe)
+            .map_err(|e| DataFusionError::External(Box::new(e)))
+    }
+
+    fn evaluate_prepare_right(
+        &self, build: &geos::Geometry, probe: &PreparedGeometry<'_>,
+    ) -> Result<bool> {
+        probe
+            .intersects(build)
+            .map_err(|e| DataFusionError::External(Box::new(e)))
     }
 }
 
@@ -473,6 +618,22 @@ impl RelationEvaluator for ContainsEvaluator {
         let probe_geom = probe.to_geometry();
         build_geom.contains(&probe_geom)
     }
+
+    fn evaluate_prepare_left(
+        &self, build: &PreparedGeometry<'_>, probe: &geos::Geometry,
+    ) -> Result<bool> {
+        build
+            .contains(probe)
+            .map_err(|e| DataFusionError::External(Box::new(e)))
+    }
+
+    fn evaluate_prepare_right(
+        &self, build: &geos::Geometry, probe: &PreparedGeometry<'_>,
+    ) -> Result<bool> {
+        probe
+            .within(build)
+            .map_err(|e| DataFusionError::External(Box::new(e)))
+    }
 }
 
 #[derive(Debug)]
@@ -484,11 +645,68 @@ impl RelationEvaluator for WithinEvaluator {
         let probe_geom = probe.to_geometry();
         build_geom.is_within(&probe_geom)
     }
+
+    fn evaluate_prepare_left(
+        &self, build: &PreparedGeometry<'_>, probe: &geos::Geometry,
+    ) -> Result<bool> {
+        build
+            .within(probe)
+            .map_err(|e| DataFusionError::External(Box::new(e)))
+    }
+
+    fn evaluate_prepare_right(
+        &self, build: &geos::Geometry, probe: &PreparedGeometry<'_>,
+    ) -> Result<bool> {
+        probe
+            .contains(build)
+            .map_err(|e| DataFusionError::External(Box::new(e)))
+    }
+}
+
+#[derive(Debug)]
+pub struct EqualsEvaluator;
+
+impl RelationEvaluator for EqualsEvaluator {
+    fn evaluate(&self, build: &Wkb, probe: &Wkb) -> bool {
+        let build_geom = build.to_geometry();
+        let probe_geom = probe.to_geometry();
+        build_geom.relate(&probe_geom).is_equal_topo()
+    }
+
+    fn evaluate_prepare_left(
+        &self, build: &PreparedGeometry<'_>, probe: &geos::Geometry,
+    ) -> Result<bool> {
+        if !build
+            .covers(probe)
+            .map_err(|e| DataFusionError::External(Box::new(e)))?
+        {
+            return Ok(false);
+        }
+
+        build
+            .covered_by(probe)
+            .map_err(|e| DataFusionError::External(Box::new(e)))
+    }
+
+    fn evaluate_prepare_right(
+        &self, build: &geos::Geometry, probe: &PreparedGeometry<'_>,
+    ) -> Result<bool> {
+        if !probe
+            .covered_by(build)
+            .map_err(|e| DataFusionError::External(Box::new(e)))?
+        {
+            return Ok(false);
+        }
+
+        probe
+            .covers(build)
+            .map_err(|e| DataFusionError::External(Box::new(e)))
+    }
 }
 
 /// Macro to generate relation evaluators that use the relate() method
 macro_rules! impl_relate_evaluator {
-    ($struct_name:ident, $method:ident) => {
+    ($struct_name:ident, $geo_method:ident, $geos_method:ident, $inverted_geos_method:ident) => {
         #[derive(Debug)]
         pub struct $struct_name;
 
@@ -496,16 +714,31 @@ macro_rules! impl_relate_evaluator {
             fn evaluate(&self, build: &Wkb, probe: &Wkb) -> bool {
                 let build_geom = build.to_geometry();
                 let probe_geom = probe.to_geometry();
-                build_geom.relate(&probe_geom).$method()
+                build_geom.relate(&probe_geom).$geo_method()
+            }
+
+            fn evaluate_prepare_left(
+                &self, build: &PreparedGeometry<'_>, probe: &geos::Geometry,
+            ) -> Result<bool> {
+                build
+                    .$geos_method(probe)
+                    .map_err(|e| DataFusionError::External(Box::new(e)))
+            }
+
+            fn evaluate_prepare_right(
+                &self, build: &geos::Geometry, probe: &PreparedGeometry<'_>,
+            ) -> Result<bool> {
+                probe
+                    .$inverted_geos_method(build)
+                    .map_err(|e| DataFusionError::External(Box::new(e)))
             }
         }
     };
 }
 
 // Generate relate-based evaluators using the macro
-impl_relate_evaluator!(TouchesEvaluator, is_touches);
-impl_relate_evaluator!(CrossesEvaluator, is_crosses);
-impl_relate_evaluator!(OverlapsEvaluator, is_overlaps);
-impl_relate_evaluator!(CoversEvaluator, is_covers);
-impl_relate_evaluator!(CoveredByEvaluator, is_coveredby);
-impl_relate_evaluator!(EqualsEvaluator, is_equal_topo);
+impl_relate_evaluator!(TouchesEvaluator, is_touches, touches, touches);
+impl_relate_evaluator!(CrossesEvaluator, is_crosses, crosses, crosses);
+impl_relate_evaluator!(OverlapsEvaluator, is_overlaps, overlaps, overlaps);
+impl_relate_evaluator!(CoversEvaluator, is_covers, covers, covers);
+impl_relate_evaluator!(CoveredByEvaluator, is_coveredby, covered_by, covered_by);

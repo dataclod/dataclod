@@ -62,8 +62,6 @@ pub struct SpatialJoinExec {
     /// Cache holding plan properties like equivalences, output partitioning
     /// etc.
     cache: PlanProperties,
-    /// Spatial join options
-    options: SpatialJoinOptions,
     /// Once future for building the spatial index.
     /// This futures run only once before the spatial index probing phase.
     once_async_spatial_index: OnceAsync<SpatialIndex>,
@@ -74,7 +72,6 @@ impl SpatialJoinExec {
     pub fn try_new(
         left: Arc<dyn ExecutionPlan>, right: Arc<dyn ExecutionPlan>, on: SpatialPredicate,
         filter: Option<JoinFilter>, join_type: &JoinType, projection: Option<Vec<usize>>,
-        options: SpatialJoinOptions,
     ) -> Result<Self> {
         let left_schema = left.schema();
         let right_schema = right.schema();
@@ -101,7 +98,6 @@ impl SpatialJoinExec {
             projection,
             metrics: Default::default(),
             cache,
-            options,
             once_async_spatial_index: OnceAsync::default(),
         })
     }
@@ -289,7 +285,6 @@ impl ExecutionPlan for SpatialJoinExec {
             projection: self.projection.clone(),
             metrics: Default::default(),
             cache: self.cache.clone(),
-            options: self.options.clone(),
             once_async_spatial_index: OnceAsync::default(),
         }))
     }
@@ -297,6 +292,10 @@ impl ExecutionPlan for SpatialJoinExec {
     fn execute(
         &self, partition: usize, context: Arc<TaskContext>,
     ) -> Result<SendableRecordBatchStream> {
+        let session_config = context.session_config();
+        let target_output_batch_size = session_config.options().execution.batch_size;
+        let options = SpatialJoinOptions::default();
+
         let once_partial_leaf_nodes = self.once_async_spatial_index.try_once(|| {
             let build_side = &self.left;
 
@@ -315,7 +314,7 @@ impl ExecutionPlan for SpatialJoinExec {
                 build_side.schema(),
                 build_streams,
                 self.on.clone(),
-                self.options.clone(),
+                options.clone(),
                 build_metrics,
                 Arc::clone(context.memory_pool()),
                 self.join_type,
@@ -350,7 +349,8 @@ impl ExecutionPlan for SpatialJoinExec {
             column_indices_after_projection,
             probe_side_ordered,
             join_metrics,
-            self.options.clone(),
+            options,
+            target_output_batch_size,
             once_partial_leaf_nodes,
         )))
     }

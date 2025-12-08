@@ -6,7 +6,7 @@ use datafusion::execution::SessionStateBuilder;
 use datafusion::execution::context::{SessionConfig, SessionContext};
 use datafusion::logical_expr::{LogicalPlan, LogicalPlanBuilder, Statement};
 use datafusion::sql::parser::Statement as SqlStatement;
-use datafusion_extra::spatial::{SpatialJoinOptions, register_spatial_join_optimizer};
+use datafusion_extra::spatial::register_spatial_join_optimizer;
 use parking_lot::RwLock;
 
 use crate::rewrite::StatementRewrite;
@@ -34,8 +34,7 @@ impl QueryContext {
         let state_builder = SessionStateBuilder::new()
             .with_config(config)
             .with_default_features();
-        let state_builder =
-            register_spatial_join_optimizer(state_builder, SpatialJoinOptions::default());
+        let state_builder = register_spatial_join_optimizer(state_builder);
         let state = state_builder.build();
         let ctx = SessionContext::new_with_state(state);
         datafusion_extra::catalog::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");
