@@ -36,29 +36,6 @@ use datafusion::physical_plan::joins::utils::{
 };
 use datafusion::physical_plan::{ExecutionPlan, ExecutionPlanProperties};
 
-/// The indices of the rows from the build and probe sides in the joined result.
-#[derive(Clone, Debug)]
-pub struct JoinedRowsIndices {
-    /// The indices of the rows in the build side.
-    /// The first element is the batch index in the spatial index, the second
-    /// element is the row index in the batch.
-    pub build: Vec<(i32, i32)>,
-    /// The indices of the rows in the probe side.
-    pub probe: Vec<u32>,
-}
-
-impl JoinedRowsIndices {
-    /// Creates a new JoinedRowsIndices with the given build and probe indices.
-    pub fn new(build: Vec<(i32, i32)>, probe: Vec<u32>) -> Self {
-        debug_assert_eq!(
-            build.len(),
-            probe.len(),
-            "Build and probe indices must have the same length"
-        );
-        Self { build, probe }
-    }
-}
-
 /// Some type `join_type` of join need to maintain the matched indices bit map
 /// for the left side, and use the bit map to generate the part of result of the
 /// join.

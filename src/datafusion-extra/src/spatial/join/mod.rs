@@ -1,9 +1,12 @@
+mod concurrent_reservation;
 pub mod exec;
-pub mod index;
+mod index;
+mod init_once_array;
 mod once_fut;
+mod operand_evaluator;
 pub mod optimizer;
-pub mod option;
-mod prep_geom_array;
+mod option;
+mod refine;
 mod spatial_predicate;
-pub mod stream;
+mod stream;
 mod utils;

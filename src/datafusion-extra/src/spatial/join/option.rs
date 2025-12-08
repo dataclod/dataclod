@@ -29,6 +29,7 @@ impl Default for SpatialJoinOptions {
 /// by prepared geometries at all (for example, ST_Touches, ST_Crosses,
 /// ST_DWithin).
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum ExecutionMode {
     /// Don't use prepared geometries for spatial predicate evaluation.
     PrepareNone,
