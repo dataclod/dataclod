@@ -111,6 +111,31 @@ impl SpatialJoinExec {
         &self.join_type
     }
 
+    /// Returns a vector indicating whether the left and right inputs maintain
+    /// their order. The first element corresponds to the left input, and
+    /// the second to the right.
+    ///
+    /// The left (build-side) input's order may change, but the right
+    /// (probe-side) input's order is maintained for INNER, RIGHT, RIGHT
+    /// ANTI, and RIGHT SEMI joins.
+    ///
+    /// Maintaining the right input's order helps optimize the nodes down the
+    /// pipeline (See [`ExecutionPlan::maintains_input_order`]).
+    ///
+    /// This is a separate method because it is also called when computing
+    /// properties, before a [`NestedLoopJoinExec`] is created. It also
+    /// takes [`JoinType`] as an argument, as opposed to `Self`, for the
+    /// same reason.
+    fn maintains_input_order(join_type: JoinType) -> Vec<bool> {
+        vec![
+            false,
+            matches!(
+                join_type,
+                JoinType::Inner | JoinType::Right | JoinType::RightAnti | JoinType::RightSemi
+            ),
+        ]
+    }
+
     /// Does this join has a projection on the joined columns
     pub fn contains_projection(&self) -> bool {
         self.projection.is_some()
@@ -242,6 +267,10 @@ impl ExecutionPlan for SpatialJoinExec {
         &self.cache
     }
 
+    fn maintains_input_order(&self) -> Vec<bool> {
+        Self::maintains_input_order(self.join_type)
+    }
+
     fn children(&self) -> Vec<&Arc<dyn ExecutionPlan>> {
         vec![&self.left, &self.right]
     }
@@ -280,12 +309,17 @@ impl ExecutionPlan for SpatialJoinExec {
                 build_metrics.push(SpatialJoinMetrics::new(k, &self.metrics));
             }
 
+            let probe_thread_count = self.right.output_partitioning().partition_count();
+
             Ok(build_index(
+                build_side.schema(),
                 build_streams,
                 self.on.clone(),
                 self.options.clone(),
                 build_metrics,
                 Arc::clone(context.memory_pool()),
+                self.join_type,
+                probe_thread_count,
             ))
         })?;
 
@@ -303,6 +337,10 @@ impl ExecutionPlan for SpatialJoinExec {
         let join_metrics = SpatialJoinMetrics::new(partition, &self.metrics);
         let probe_stream = self.right.execute(partition, Arc::clone(&context))?;
 
+        // Right side has an order and it is maintained during operation.
+        let probe_side_ordered =
+            self.maintains_input_order()[1] && self.right.output_ordering().is_some();
+
         Ok(Box::pin(SpatialJoinStream::new(
             self.schema(),
             &self.on,
@@ -310,6 +348,7 @@ impl ExecutionPlan for SpatialJoinExec {
             self.join_type,
             probe_stream,
             column_indices_after_projection,
+            probe_side_ordered,
             join_metrics,
             self.options.clone(),
             once_partial_leaf_nodes,

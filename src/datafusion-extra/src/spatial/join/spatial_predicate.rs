@@ -234,8 +234,14 @@ impl DistancePredicateEvaluator {
 
 /// Result of evaluating a geometry batch.
 pub struct GeometryBatchResult {
+    /// The array of geometries produced by evaluating the geometry expression.
     pub geometry_array: ArrayRef,
+    /// The rects of the geometries in the geometry array. Each geometry could
+    /// be covered by a collection of multiple rects. The first element of
+    /// the tuple is the index of the geometry in the geometry array.
+    /// This array is guaranteed to be sorted by the index of the geometry.
     pub rects: Vec<(usize, Rect)>,
+    /// The distance value produced by evaluating the distance expression.
     pub distance: Option<ColumnarValue>,
 }
 

@@ -37,7 +37,7 @@ impl PgWireServerHandlers for PostgresBackend {
         Arc::new(DataClodStartupHandler {
             auth_source: Arc::new(DataClodAuthSource),
             parameter_provider: Arc::new(DataClodParameterProvider),
-            cached_password: Mutex::new(vec![]),
+            cached_password: Mutex::new(Vec::new()),
         })
     }
 }

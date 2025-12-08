@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
-use datafusion::arrow::array::RecordBatch;
+use datafusion::arrow::array::{BooleanBufferBuilder, RecordBatch, UInt32Array, UInt64Array};
+use datafusion::arrow::compute::interleave_record_batch;
 use datafusion::arrow::datatypes::{Schema, SchemaRef};
-use datafusion::common::{JoinSide, Result};
+use datafusion::common::{JoinSide, Result, internal_err};
 use datafusion::logical_expr::JoinType;
 use datafusion::physical_plan::joins::utils::{ColumnIndex, JoinFilter, StatefulStreamResult};
 use datafusion::physical_plan::metrics::{self, ExecutionPlanMetricsSet, MetricBuilder};
@@ -11,6 +13,7 @@ use datafusion::physical_plan::{RecordBatchStream, SendableRecordBatchStream, ha
 use futures::ready;
 use futures::stream::StreamExt;
 use futures::task::Poll;
+use parking_lot::Mutex;
 
 use crate::spatial::join::index::SpatialIndex;
 use crate::spatial::join::once_fut::OnceFut;
@@ -20,7 +23,7 @@ use crate::spatial::join::spatial_predicate::{
 };
 use crate::spatial::join::utils::{
     JoinedRowsIndices, adjust_indices_by_join_type, apply_join_filter_to_indices,
-    build_batch_from_indices,
+    build_batch_from_indices, get_final_indices_from_bit_map, need_produce_result_in_final,
 };
 use crate::spatial::join::wkb_array::{WkbArrayAccess, create_wkb_array_access};
 
@@ -36,6 +39,8 @@ pub(crate) struct SpatialJoinStream {
     probe_stream: SendableRecordBatchStream,
     /// Information of index and left / right placement of columns
     column_indices: Vec<ColumnIndex>,
+    /// Maintains the order of the probe side
+    probe_side_ordered: bool,
     /// Join execution metrics
     join_metrics: SpatialJoinMetrics,
     /// Current state of the stream
@@ -56,8 +61,9 @@ impl SpatialJoinStream {
     pub(crate) fn new(
         schema: Arc<Schema>, on: &SpatialPredicate, filter: Option<JoinFilter>,
         join_type: JoinType, probe_stream: SendableRecordBatchStream,
-        column_indices: Vec<ColumnIndex>, join_metrics: SpatialJoinMetrics,
-        options: SpatialJoinOptions, once_partial_leaf_nodes: OnceFut<SpatialIndex>,
+        column_indices: Vec<ColumnIndex>, probe_side_ordered: bool,
+        join_metrics: SpatialJoinMetrics, options: SpatialJoinOptions,
+        once_partial_leaf_nodes: OnceFut<SpatialIndex>,
     ) -> Self {
         let evaluator = on.evaluator(options.clone());
         Self {
@@ -66,6 +72,7 @@ impl SpatialJoinStream {
             join_type,
             probe_stream,
             column_indices,
+            probe_side_ordered,
             join_metrics,
             state: SpatialJoinStreamState::WaitBuildIndex,
             options,
@@ -138,6 +145,9 @@ pub(crate) enum SpatialJoinStreamState {
     ProcessProbeBatch(SpatialJoinBatchIterator),
     /// Indicates that probe-side has been fully processed
     ExhaustedProbeSide,
+    /// Indicates that we're processing unmatched build-side batches using an
+    /// iterator
+    ProcessUnmatchedBuildBatch(UnmatchedBuildBatchIterator),
     /// Indicates that SpatialJoinStream execution is completed
     Completed,
 }
@@ -158,6 +168,9 @@ impl SpatialJoinStream {
                     handle_state!(ready!(self.process_probe_batch()))
                 }
                 SpatialJoinStreamState::ExhaustedProbeSide => {
+                    handle_state!(ready!(self.setup_unmatched_build_batch_processing()))
+                }
+                SpatialJoinStreamState::ProcessUnmatchedBuildBatch(_) => {
                     handle_state!(ready!(self.process_unmatched_build_batch()))
                 }
                 SpatialJoinStreamState::Completed => Poll::Ready(None),
@@ -240,12 +253,83 @@ impl SpatialJoinStream {
         Poll::Ready(Ok(StatefulStreamResult::Ready(Some(result))))
     }
 
+    fn setup_unmatched_build_batch_processing(
+        &mut self,
+    ) -> Poll<Result<StatefulStreamResult<Option<RecordBatch>>>> {
+        let Some(spatial_index) = self.spatial_index.as_ref() else {
+            return Poll::Ready(internal_err!("Expected spatial index to be available"));
+        };
+
+        // Initial setup for processing unmatched build batches
+        if need_produce_result_in_final(self.join_type) {
+            // Only produce left-outer batches if this is the last partition that finished
+            // probing. This mechanism is similar to the one in
+            // NestedLoopJoinStream.
+            if !spatial_index.report_probe_completed() {
+                self.state = SpatialJoinStreamState::Completed;
+                return Poll::Ready(Ok(StatefulStreamResult::Ready(None)));
+            }
+
+            let empty_right_batch = RecordBatch::new_empty(self.probe_stream.schema());
+
+            match UnmatchedBuildBatchIterator::new(spatial_index.clone(), empty_right_batch) {
+                Ok(iterator) => {
+                    self.state = SpatialJoinStreamState::ProcessUnmatchedBuildBatch(iterator);
+                    Poll::Ready(Ok(StatefulStreamResult::Continue))
+                }
+                Err(e) => Poll::Ready(Err(e)),
+            }
+        } else {
+            // end of the join loop
+            self.state = SpatialJoinStreamState::Completed;
+            Poll::Ready(Ok(StatefulStreamResult::Ready(None)))
+        }
+    }
+
     fn process_unmatched_build_batch(
         &mut self,
     ) -> Poll<Result<StatefulStreamResult<Option<RecordBatch>>>> {
-        // TODO: process unmatched build batch to support outer joins
-        self.state = SpatialJoinStreamState::Completed;
-        Poll::Ready(Ok(StatefulStreamResult::Continue))
+        // Extract the iterator from the state to avoid borrowing conflicts
+        let (batch_opt, is_complete) = match &mut self.state {
+            SpatialJoinStreamState::ProcessUnmatchedBuildBatch(iterator) => {
+                let batch_opt = match iterator.next_batch(
+                    &self.schema,
+                    self.join_type,
+                    &self.column_indices,
+                    JoinSide::Left,
+                ) {
+                    Ok(opt) => opt,
+                    Err(e) => return Poll::Ready(Err(e)),
+                };
+                let is_complete = iterator.is_complete();
+                (batch_opt, is_complete)
+            }
+            _ => {
+                return Poll::Ready(internal_err!(
+                    "process_unmatched_build_batch called with invalid state"
+                ));
+            }
+        };
+
+        match batch_opt {
+            Some(batch) => {
+                // Update metrics
+                self.join_metrics.output_batches.add(1);
+                self.join_metrics.output_rows.add(batch.num_rows());
+
+                // Check if iterator is complete
+                if is_complete {
+                    self.state = SpatialJoinStreamState::Completed;
+                }
+
+                Poll::Ready(Ok(StatefulStreamResult::Ready(Some(batch))))
+            }
+            None => {
+                // Iterator finished, complete the stream
+                self.state = SpatialJoinStreamState::Completed;
+                Poll::Ready(Ok(StatefulStreamResult::Ready(None)))
+            }
+        }
     }
 
     fn create_spatial_join_iterator(
@@ -272,6 +356,7 @@ impl SpatialJoinStream {
             self.evaluator.clone(),
             Arc::new(self.join_metrics.clone()),
             self.options.max_batch_size,
+            self.probe_side_ordered,
         )
     }
 }
@@ -292,6 +377,15 @@ impl RecordBatchStream for SpatialJoinStream {
     }
 }
 
+/// A partial build batch is a batch containing rows from build-side records
+/// that are needed to produce a result batch in probe phase. It is created by
+/// interleaving the build side batches.
+struct PartialBuildBatch {
+    batch: RecordBatch,
+    indices: UInt64Array,
+    interleave_indices_map: HashMap<(i32, i32), usize>,
+}
+
 /// Iterator that processes spatial join results in configurable batch sizes
 pub(crate) struct SpatialJoinBatchIterator {
     /// Current accumulated build batch positions
@@ -304,6 +398,8 @@ pub(crate) struct SpatialJoinBatchIterator {
     spatial_index: Arc<SpatialIndex>,
     /// The probe batch being processed
     probe_batch: RecordBatch,
+    /// Maintains the order of the probe side
+    probe_side_ordered: bool,
     /// Current probe row index being processed
     current_probe_idx: usize,
     /// The rects from evaluating the probe batch
@@ -326,7 +422,7 @@ impl SpatialJoinBatchIterator {
     pub(crate) fn new(
         spatial_index: Arc<SpatialIndex>, probe_batch: RecordBatch,
         geometry_batch_result: GeometryBatchResult, evaluator: Arc<dyn SpatialPredicateEvaluator>,
-        join_metrics: Arc<SpatialJoinMetrics>, max_batch_size: usize,
+        join_metrics: Arc<SpatialJoinMetrics>, max_batch_size: usize, probe_side_ordered: bool,
     ) -> Result<Self> {
         let GeometryBatchResult {
             geometry_array,
@@ -343,6 +439,7 @@ impl SpatialJoinBatchIterator {
             max_batch_size,
             spatial_index,
             probe_batch,
+            probe_side_ordered,
             current_probe_idx: 0,
             rects,
             current_rect_idx: 0,
@@ -361,6 +458,7 @@ impl SpatialJoinBatchIterator {
         // Process probe rows incrementally until we have enough results or finish
         let initial_size = self.build_batch_positions.len();
         let num_rows = self.wkb_accessor.len();
+        let last_probe_idx = self.current_probe_idx;
 
         // Process from current position until we hit batch size limit or complete
         while self.current_probe_idx < num_rows && !self.is_complete {
@@ -368,7 +466,7 @@ impl SpatialJoinBatchIterator {
             let wkb_opt = self.wkb_accessor.get_wkb_at(self.current_probe_idx)?;
 
             let Some(wkb) = wkb_opt else {
-                // Move to next probe index if current is null
+                // Move to next probe index
                 self.current_probe_idx += 1;
                 continue;
             };
@@ -399,27 +497,9 @@ impl SpatialJoinBatchIterator {
                 self.join_metrics
                     .join_result_count
                     .add(join_result_metrics.count);
-
-                // Check if we've accumulated enough results
-                if self.build_batch_positions.len() >= self.max_batch_size {
-                    // Don't increment current_probe_idx yet as we may have more rects for this
-                    // probe index
-                    if self.current_rect_idx >= self.rects.len()
-                        || self.rects[self.current_rect_idx].0 != self.current_probe_idx
-                    {
-                        // No more rects for this probe index, move to next
-                        self.current_probe_idx += 1;
-                    }
-                    break;
-                }
             }
 
-            // If we've processed all rects for this probe index, move to next
-            if self.current_rect_idx >= self.rects.len()
-                || self.rects[self.current_rect_idx].0 != self.current_probe_idx
-            {
-                self.current_probe_idx += 1;
-            }
+            self.current_probe_idx += 1;
 
             // Early exit if we have enough results
             if self.build_batch_positions.len() >= self.max_batch_size {
@@ -447,6 +527,7 @@ impl SpatialJoinBatchIterator {
                 join_type,
                 column_indices,
                 build_side,
+                last_probe_idx..self.current_probe_idx,
             )?;
 
             Ok(Some(batch))
@@ -461,77 +542,60 @@ impl SpatialJoinBatchIterator {
     }
 
     /// Process joined indices and create a RecordBatch
+    #[allow(clippy::too_many_arguments)]
     fn process_joined_indices_to_batch(
         &self, joined_indices: &JoinedRowsIndices, schema: &Schema, filter: Option<&JoinFilter>,
         join_type: JoinType, column_indices: &[ColumnIndex], build_side: JoinSide,
+        probe_range: Range<usize>,
     ) -> Result<RecordBatch> {
-        if joined_indices.is_empty() {
-            let empty_batch = RecordBatch::new_empty(Arc::new(schema.clone()));
-            self.join_metrics.output_batches.add(1);
-            return Ok(empty_batch);
-        }
+        let PartialBuildBatch {
+            batch: partial_build_batch,
+            indices: build_indices,
+            interleave_indices_map,
+        } = self.assemble_partial_build_batch(&joined_indices.build)?;
+        let probe_indices = UInt32Array::from_iter_values(joined_indices.probe.clone());
 
-        // Get only the build batches that are actually needed
-        let mut batch_index_map: HashMap<i32, i32> = HashMap::new();
-        let mut needed_batch_indices: Vec<i32> = Vec::new();
-
-        for (batch_idx, _) in &joined_indices.build {
-            if !batch_index_map.contains_key(batch_idx) {
-                let new_idx = needed_batch_indices.len() as i32;
-                batch_index_map.insert(*batch_idx, new_idx);
-                needed_batch_indices.push(*batch_idx);
-            }
-        }
-
-        // Fetch only needed batches
-        let mut build_batches: Vec<&RecordBatch> = Vec::new();
-        for &batch_idx in &needed_batch_indices {
-            // SAFETY: batch_idx is retrieved by calling spatial_index.query, so the index
-            // must be valid.
-            let batch = unsafe { self.spatial_index.get_indexed_batch(batch_idx as usize) };
-            build_batches.push(batch);
-        }
-
-        // Remap build_batch_positions to use new batch indices (in-place)
-        let mut remapped_joined_indices = joined_indices.clone();
-        for (batch_idx, _) in &mut remapped_joined_indices.build {
-            *batch_idx = batch_index_map[batch_idx];
-        }
-
-        let joined_indices = match filter {
+        let (build_indices, probe_indices) = match filter {
             Some(filter) => {
                 apply_join_filter_to_indices(
-                    &build_batches,
-                    &remapped_joined_indices,
+                    &partial_build_batch,
                     &self.probe_batch,
+                    build_indices,
+                    probe_indices,
                     filter,
                     build_side,
                 )?
             }
-            None => remapped_joined_indices,
+            None => (build_indices, probe_indices),
         };
 
-        // If no rows pass the filters, return empty batch
-        if joined_indices.is_empty() {
-            let empty_batch = RecordBatch::new_empty(Arc::new(schema.clone()));
-            self.join_metrics.output_batches.add(1);
-            return Ok(empty_batch);
+        // set the left bitmap
+        if need_produce_result_in_final(join_type)
+            && let Some(visited_bitmaps) = self.spatial_index.visited_left_side()
+        {
+            mark_build_side_rows_as_visited(
+                &build_indices,
+                &interleave_indices_map,
+                visited_bitmaps,
+            );
         }
 
-        let joined_indices = adjust_indices_by_join_type(
-            &joined_indices,
-            0..self.probe_batch.num_rows(),
+        // adjust the two side indices base on the join type
+        let (build_indices, probe_indices) = adjust_indices_by_join_type(
+            build_indices,
+            probe_indices,
+            probe_range,
             join_type,
-            true,
+            self.probe_side_ordered,
         );
 
         // Build the final result batch
         let result_batch = build_batch_from_indices(
             schema,
-            &build_batches,
-            &joined_indices.build,
+            &partial_build_batch,
             &self.probe_batch,
-            &joined_indices.probe,
+            &build_indices,
+            &probe_indices,
             column_indices,
             build_side,
         )?;
@@ -541,6 +605,114 @@ impl SpatialJoinBatchIterator {
         self.join_metrics.output_rows.add(result_batch.num_rows());
 
         Ok(result_batch)
+    }
+
+    fn assemble_partial_build_batch(
+        &self, build_indices: &[(i32, i32)],
+    ) -> Result<PartialBuildBatch> {
+        let schema = self.spatial_index.schema();
+        assemble_partial_build_batch(build_indices, schema, |batch_idx| unsafe {
+            self.spatial_index.get_indexed_batch(batch_idx)
+        })
+    }
+}
+
+fn assemble_partial_build_batch<'a>(
+    build_indices: &'a [(i32, i32)], schema: SchemaRef,
+    batch_getter: impl Fn(usize) -> &'a RecordBatch,
+) -> Result<PartialBuildBatch> {
+    let num_rows = build_indices.len();
+    if num_rows == 0 {
+        let empty_batch = RecordBatch::new_empty(schema);
+        let empty_build_indices = UInt64Array::from_iter_values(Vec::new());
+        let empty_map = HashMap::new();
+        return Ok(PartialBuildBatch {
+            batch: empty_batch,
+            indices: empty_build_indices,
+            interleave_indices_map: empty_map,
+        });
+    }
+
+    // Get only the build batches that are actually needed
+    let mut needed_build_batches: Vec<&RecordBatch> = Vec::with_capacity(num_rows);
+
+    // Mapping from global batch index to partial batch index for generating this
+    // result batch
+    let mut needed_batch_index_map: HashMap<i32, i32> = HashMap::with_capacity(num_rows);
+
+    let mut interleave_indices_map: HashMap<(i32, i32), usize> = HashMap::with_capacity(num_rows);
+    let mut interleave_indices: Vec<(usize, usize)> = Vec::with_capacity(num_rows);
+
+    // The indices of joined rows from the partial build batches.
+    let mut partial_build_indices_builder = UInt64Array::builder(num_rows);
+
+    for (batch_idx, row_idx) in build_indices {
+        let local_batch_idx = if let Some(idx) = needed_batch_index_map.get(batch_idx) {
+            *idx
+        } else {
+            let new_idx = needed_build_batches.len() as i32;
+            needed_batch_index_map.insert(*batch_idx, new_idx);
+            needed_build_batches.push(batch_getter(*batch_idx as usize));
+            new_idx
+        };
+
+        if let Some(idx) = interleave_indices_map.get(&(*batch_idx, *row_idx)) {
+            // We have already seen this row. It will be in the interleaved batch at
+            // position `idx`
+            partial_build_indices_builder.append_value(*idx as u64);
+        } else {
+            // The row has not been seen before, we need to interleave it into the partial
+            // build batch. The index of the row in the partial build batch will
+            // be `interleave_indices.len()`.
+            let idx = interleave_indices.len();
+            interleave_indices_map.insert((*batch_idx, *row_idx), idx);
+            interleave_indices.push((local_batch_idx as usize, *row_idx as usize));
+            partial_build_indices_builder.append_value(idx as u64);
+        }
+    }
+
+    let partial_build_indices = partial_build_indices_builder.finish();
+
+    // Assemble an interleaved batch on build side, so that we can reuse the join
+    // indices processing routines in utils.rs (taken verbatimly from
+    // datafusion)
+    let partial_build_batch = interleave_record_batch(&needed_build_batches, &interleave_indices)?;
+
+    Ok(PartialBuildBatch {
+        batch: partial_build_batch,
+        indices: partial_build_indices,
+        interleave_indices_map,
+    })
+}
+
+fn mark_build_side_rows_as_visited(
+    build_indices: &UInt64Array, interleave_indices_map: &HashMap<(i32, i32), usize>,
+    visited_bitmaps: &Mutex<Vec<BooleanBufferBuilder>>,
+) {
+    // invert the interleave_indices_map for easier getting the global batch index
+    // and row index from partial batch row index
+    let mut inverted_interleave_indices_map: HashMap<usize, (i32, i32)> =
+        HashMap::with_capacity(interleave_indices_map.len());
+    for ((batch_idx, row_idx), partial_idx) in interleave_indices_map {
+        inverted_interleave_indices_map.insert(*partial_idx, (*batch_idx, *row_idx));
+    }
+
+    // Lock the mutex once and iterate over build_indices to set the left bitmap
+    let mut bitmaps = visited_bitmaps.lock();
+    for partial_batch_row_idx in build_indices {
+        let Some(partial_batch_row_idx) = partial_batch_row_idx else {
+            continue;
+        };
+        let partial_batch_row_idx = partial_batch_row_idx as usize;
+        let Some((batch_idx, row_idx)) =
+            inverted_interleave_indices_map.get(&partial_batch_row_idx)
+        else {
+            continue;
+        };
+        let Some(bitmap) = bitmaps.get_mut(*batch_idx as usize) else {
+            continue;
+        };
+        bitmap.set_bit(*row_idx as usize, true);
     }
 }
 
@@ -557,6 +729,105 @@ impl std::fmt::Debug for SpatialJoinBatchIterator {
                 &self.build_batch_positions.len(),
             )
             .field("probe_indices_len", &self.probe_indices.len())
+            .finish()
+    }
+}
+
+/// Iterator that processes unmatched build-side batches for outer joins
+pub(crate) struct UnmatchedBuildBatchIterator {
+    /// The spatial index reference
+    spatial_index: Arc<SpatialIndex>,
+    /// Current batch index being processed
+    current_batch_idx: usize,
+    /// Total number of batches to process
+    total_batches: usize,
+    /// Empty right batch for joining
+    empty_right_batch: RecordBatch,
+    /// Whether iteration is complete
+    is_complete: bool,
+}
+
+impl UnmatchedBuildBatchIterator {
+    pub(crate) fn new(
+        spatial_index: Arc<SpatialIndex>, empty_right_batch: RecordBatch,
+    ) -> Result<Self> {
+        let visited_left_side = spatial_index.visited_left_side();
+        let Some(vec_visited_left_side) = visited_left_side else {
+            return internal_err!("The bitmap for visited left side is not created");
+        };
+
+        let total_batches = {
+            let visited_bitmaps = vec_visited_left_side.lock();
+            visited_bitmaps.len()
+        };
+
+        Ok(Self {
+            spatial_index,
+            current_batch_idx: 0,
+            total_batches,
+            empty_right_batch,
+            is_complete: false,
+        })
+    }
+
+    pub fn next_batch(
+        &mut self, schema: &Schema, join_type: JoinType, column_indices: &[ColumnIndex],
+        build_side: JoinSide,
+    ) -> Result<Option<RecordBatch>> {
+        while self.current_batch_idx < self.total_batches && !self.is_complete {
+            let visited_left_side = self.spatial_index.visited_left_side();
+            let Some(vec_visited_left_side) = visited_left_side else {
+                return internal_err!("The bitmap for visited left side is not created");
+            };
+
+            let batch = {
+                let visited_bitmaps = vec_visited_left_side.lock();
+                let visited_left_side = &visited_bitmaps[self.current_batch_idx];
+                let (left_side, right_side) =
+                    get_final_indices_from_bit_map(visited_left_side, join_type);
+
+                build_batch_from_indices(
+                    schema,
+                    unsafe { self.spatial_index.get_indexed_batch(self.current_batch_idx) },
+                    &self.empty_right_batch,
+                    &left_side,
+                    &right_side,
+                    column_indices,
+                    build_side,
+                )?
+            };
+
+            self.current_batch_idx += 1;
+
+            // Check if we've finished processing all batches
+            if self.current_batch_idx >= self.total_batches {
+                self.is_complete = true;
+            }
+
+            // Only return non-empty batches
+            if batch.num_rows() > 0 {
+                return Ok(Some(batch));
+            }
+            // If batch is empty, continue to next batch
+        }
+
+        // No more batches or iteration complete
+        Ok(None)
+    }
+
+    /// Check if the iterator has finished processing
+    pub fn is_complete(&self) -> bool {
+        self.is_complete
+    }
+}
+
+// Manual Debug implementation for UnmatchedBuildBatchIterator
+impl std::fmt::Debug for UnmatchedBuildBatchIterator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UnmatchedBuildBatchIterator")
+            .field("current_batch_idx", &self.current_batch_idx)
+            .field("total_batches", &self.total_batches)
+            .field("is_complete", &self.is_complete)
             .finish()
     }
 }
