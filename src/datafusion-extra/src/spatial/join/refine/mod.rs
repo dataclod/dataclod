@@ -1,3 +1,4 @@
+mod exec_mode_selector;
 pub mod geos;
 
 use std::sync::Arc;
@@ -6,8 +7,9 @@ use datafusion::common::Result;
 use wkb::reader::Wkb;
 
 use crate::spatial::join::index::IndexQueryResult;
-use crate::spatial::join::option::SpatialJoinOptions;
+use crate::spatial::join::option::{ExecutionMode, SpatialJoinOptions};
 use crate::spatial::join::spatial_predicate::SpatialPredicate;
+use crate::spatial::statistics::GeoStatistics;
 
 /// Trait for refining spatial index query results by evaluating exact geometric
 /// predicates.
@@ -59,6 +61,26 @@ pub(crate) trait IndexQueryResultRefiner: Send + Sync {
     /// # Returns
     /// * `usize` - Current memory usage in bytes
     fn mem_usage(&self) -> usize;
+
+    /// Get the actual execution mode used by the refiner.
+    ///
+    /// # Returns
+    /// * `ExecutionMode` - The actual execution mode used by the refiner
+    fn actual_execution_mode(&self) -> ExecutionMode;
+
+    /// Check if the refiner needs more probe statistics to determine the
+    /// optimal execution mode.
+    ///
+    /// # Returns
+    /// * `bool` - `true` if the refiner needs more probe statistics, `false`
+    ///   otherwise.
+    fn need_more_probe_stats(&self) -> bool;
+
+    /// Merge the probe statistics into the refiner.
+    ///
+    /// # Arguments
+    /// * `stats` - The probe statistics to merge.
+    fn merge_probe_stats(&self, stats: GeoStatistics);
 }
 
 /// Create a spatial predicate refiner for the specified geometry library.
@@ -76,12 +98,20 @@ pub(crate) trait IndexQueryResultRefiner: Send + Sync {
 ///   optimization settings
 /// * `num_build_geoms` - Total number of build-side geometries, used to size
 ///   prepared geometry caches when using preparation-based execution modes
+/// * `build_stats` - Statistics for the build-side geometries, used to optimize
+///   the refine process.
 ///
 /// # Returns
 /// * `Arc<dyn IndexQueryResultRefiner>` - Thread-safe refiner implementation
 ///   for the specified library
 pub(crate) fn create_refiner(
     predicate: &SpatialPredicate, options: SpatialJoinOptions, num_build_geoms: usize,
+    build_stats: GeoStatistics,
 ) -> Arc<dyn IndexQueryResultRefiner> {
-    Arc::new(geos::GeosRefiner::new(predicate, options, num_build_geoms))
+    Arc::new(geos::GeosRefiner::new(
+        predicate,
+        options,
+        num_build_geoms,
+        build_stats,
+    ))
 }

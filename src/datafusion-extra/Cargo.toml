@@ -27,4 +27,7 @@ geos = { git = "https://github.com/georust/geos.git", rev = "47afbad2483e489911d
 libc = "0.2"
 parking_lot.workspace = true
 proj4rs = "0.1.9"
+serde = "1.0"
+serde_json = "1.0"
+serde_with = "1.0"
 wkb = "0.9.2"

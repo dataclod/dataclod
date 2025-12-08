@@ -1,6 +1,7 @@
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use datafusion::common::{DataFusionError, Result};
+use datafusion::common::{DataFusionError, Result, internal_err};
 use geos::{Geom, PreparedGeometry};
 use parking_lot::Mutex;
 use wkb::reader::Wkb;
@@ -9,14 +10,19 @@ use crate::spatial::join::index::IndexQueryResult;
 use crate::spatial::join::init_once_array::InitOnceArray;
 use crate::spatial::join::option::{ExecutionMode, SpatialJoinOptions};
 use crate::spatial::join::refine::IndexQueryResultRefiner;
+use crate::spatial::join::refine::exec_mode_selector::{
+    ExecModeSelector, SelectorFunc, create_exec_mode_selector, get_or_update_execution_mode,
+};
 use crate::spatial::join::spatial_predicate::{SpatialPredicate, SpatialRelationType};
+use crate::spatial::statistics::GeoStatistics;
 
 /// A refiner that uses the GEOS library to evaluate spatial predicates.
 pub(crate) struct GeosRefiner {
     evaluator: Box<dyn GeosPredicateEvaluator>,
     prepared_geoms: InitOnceArray<Option<OwnedPreparedGeometry>>,
-    options: SpatialJoinOptions,
     mem_usage: AtomicUsize,
+    exec_mode: OnceLock<ExecutionMode>,
+    exec_mode_selector: Option<ExecModeSelector<SelectorFunc>>,
 }
 
 /// A wrapper around a GEOS Geometry and its corresponding PreparedGeometry.
@@ -95,39 +101,63 @@ impl OwnedPreparedGeometry {
 impl GeosRefiner {
     pub fn new(
         predicate: &SpatialPredicate, options: SpatialJoinOptions, num_build_geoms: usize,
+        build_stats: GeoStatistics,
     ) -> Self {
-        let evaluator: Box<dyn GeosPredicateEvaluator> = match predicate {
-            SpatialPredicate::Distance(_) => Box::new(GeosDistance),
-            SpatialPredicate::Relation(predicate) => {
-                match predicate.relation_type {
-                    SpatialRelationType::Intersects => Box::new(GeosIntersects),
-                    SpatialRelationType::Contains => Box::new(GeosContains),
-                    SpatialRelationType::Within => Box::new(GeosWithin),
-                    SpatialRelationType::Covers => Box::new(GeosCovers),
-                    SpatialRelationType::CoveredBy => Box::new(GeosCoveredBy),
-                    SpatialRelationType::Touches => Box::new(GeosTouches),
-                    SpatialRelationType::Crosses => Box::new(GeosCrosses),
-                    SpatialRelationType::Overlaps => Box::new(GeosOverlaps),
-                    SpatialRelationType::Equals => Box::new(GeosEquals),
+        let evaluator: Box<dyn GeosPredicateEvaluator> = create_evaluator(predicate);
+
+        let exec_mode = OnceLock::new();
+        if matches!(options.execution_mode, ExecutionMode::Speculative(_)) {
+            // Automatically select the execution mode based on spatial predicate
+            match predicate {
+                SpatialPredicate::Distance(_) => {
+                    exec_mode.set(ExecutionMode::PrepareNone).unwrap();
                 }
-            }
-        };
-        let prepared_geom_array_size = if matches!(
-            options.execution_mode,
-            ExecutionMode::PrepareBuild | ExecutionMode::Speculative(_)
-        ) {
-            num_build_geoms
+                SpatialPredicate::Relation(predicate) => {
+                    match predicate.relation_type {
+                        SpatialRelationType::Intersects => {
+                            // Both PrepareBuild and PrepareProbe can be used
+                            // for intersects predicate.
+                            // We need statistics from the probe side to select
+                            // the optimal execution mode.
+                        }
+                        SpatialRelationType::Contains | SpatialRelationType::Covers => {
+                            exec_mode.set(ExecutionMode::PrepareBuild).unwrap();
+                        }
+                        SpatialRelationType::Within | SpatialRelationType::CoveredBy => {
+                            exec_mode.set(ExecutionMode::PrepareProbe).unwrap();
+                        }
+                        _ => {
+                            // Other predicates cannot be accelerated by prepared geometries.
+                            exec_mode.set(ExecutionMode::PrepareNone).unwrap();
+                        }
+                    }
+                }
+            };
         } else {
-            0
-        };
+            exec_mode.set(options.execution_mode).unwrap();
+        }
+
+        let prepared_geom_array_size =
+            if matches!(exec_mode.get(), Some(ExecutionMode::PrepareBuild) | None) {
+                num_build_geoms
+            } else {
+                0
+            };
 
         let prepared_geoms = InitOnceArray::new(prepared_geom_array_size);
         let mem_usage = prepared_geoms.allocated_size();
+        let exec_mode_selector = if exec_mode.get().is_none() {
+            create_exec_mode_selector(build_stats, options.execution_mode, select_optimal_mode)
+        } else {
+            None
+        };
+
         Self {
             evaluator,
             prepared_geoms,
-            options,
             mem_usage: AtomicUsize::new(mem_usage),
+            exec_mode,
+            exec_mode_selector,
         }
     }
 
@@ -202,22 +232,54 @@ impl GeosRefiner {
     }
 }
 
+fn select_optimal_mode(build_stats: &GeoStatistics, probe_stats: &GeoStatistics) -> ExecutionMode {
+    // Choose a more complex side to prepare the geometries. GEOS prepared
+    // geometries are usually faster even if the geometries are simple, so we
+    // never select PrepareNone.
+    if build_stats.mean_points_per_geometry() > probe_stats.mean_points_per_geometry() {
+        ExecutionMode::PrepareBuild
+    } else {
+        ExecutionMode::PrepareProbe
+    }
+}
+
 impl IndexQueryResultRefiner for GeosRefiner {
     fn refine(
         &self, probe: &Wkb<'_>, index_query_results: &[IndexQueryResult],
     ) -> Result<Vec<(i32, i32)>> {
-        match self.options.execution_mode {
+        let exec_mode = self.actual_execution_mode();
+        match exec_mode {
             ExecutionMode::PrepareNone => self.refine_prepare_none(probe, index_query_results),
             ExecutionMode::PrepareBuild => self.refine_prepare_build(probe, index_query_results),
             ExecutionMode::PrepareProbe => self.refine_prepare_probe(probe, index_query_results),
             ExecutionMode::Speculative(_) => {
-                unimplemented!("Speculative execution mode is not implemented")
+                internal_err!(
+                    "Speculative execution mode should be translated to other execution modes"
+                )
             }
         }
     }
 
     fn mem_usage(&self) -> usize {
         self.mem_usage.load(Ordering::Relaxed)
+    }
+
+    fn actual_execution_mode(&self) -> ExecutionMode {
+        get_or_update_execution_mode(
+            &self.exec_mode,
+            &self.exec_mode_selector,
+            ExecutionMode::PrepareProbe,
+        )
+    }
+
+    fn need_more_probe_stats(&self) -> bool {
+        self.exec_mode.get().is_none()
+    }
+
+    fn merge_probe_stats(&self, stats: GeoStatistics) {
+        if let Some(selector) = self.exec_mode_selector.as_ref() {
+            selector.merge_probe_stats(stats);
+        }
     }
 }
 
@@ -231,6 +293,25 @@ trait GeosPredicateEvaluator: Send + Sync {
     fn evaluate_prepare_probe(
         &self, build: &Wkb, probe: &OwnedPreparedGeometry, distance: Option<f64>,
     ) -> Result<bool>;
+}
+
+fn create_evaluator(predicate: &SpatialPredicate) -> Box<dyn GeosPredicateEvaluator> {
+    match predicate {
+        SpatialPredicate::Distance(_) => Box::new(GeosDistance),
+        SpatialPredicate::Relation(predicate) => {
+            match predicate.relation_type {
+                SpatialRelationType::Intersects => Box::new(GeosIntersects),
+                SpatialRelationType::Contains => Box::new(GeosContains),
+                SpatialRelationType::Within => Box::new(GeosWithin),
+                SpatialRelationType::Covers => Box::new(GeosCovers),
+                SpatialRelationType::CoveredBy => Box::new(GeosCoveredBy),
+                SpatialRelationType::Touches => Box::new(GeosTouches),
+                SpatialRelationType::Crosses => Box::new(GeosCrosses),
+                SpatialRelationType::Overlaps => Box::new(GeosOverlaps),
+                SpatialRelationType::Equals => Box::new(GeosEquals),
+            }
+        }
+    }
 }
 
 struct GeosDistance;
