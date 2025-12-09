@@ -12,11 +12,11 @@ use datafusion::common::utils::proxy::VecAllocExt;
 ///
 /// Uses atomic pointers for lock-free operations with proper memory ordering.
 /// Null pointers indicate empty slots.
-pub(crate) struct InitOnceArray<T> {
+pub(crate) struct InitOnceArray<T: Send + Sync> {
     ptrs: Vec<AtomicPtr<T>>,
 }
 
-impl<T> InitOnceArray<T> {
+impl<T: Send + Sync> InitOnceArray<T> {
     /// Create a new array with the specified size.
     /// All slots start as empty (null pointers).
     pub fn new(size: usize) -> Self {
@@ -104,7 +104,7 @@ impl<T> InitOnceArray<T> {
     }
 }
 
-impl<T> Drop for InitOnceArray<T> {
+impl<T: Send + Sync> Drop for InitOnceArray<T> {
     fn drop(&mut self) {
         for ptr in &self.ptrs {
             let ptr = ptr.load(Ordering::Acquire);

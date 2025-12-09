@@ -11,7 +11,7 @@ use datafusion::execution::memory_pool::{MemoryConsumer, MemoryPool, MemoryReser
 use datafusion::logical_expr::ColumnarValue;
 use datafusion::physical_plan::metrics::{self, ExecutionPlanMetricsSet, MetricBuilder};
 use futures::StreamExt;
-use geo_index::rtree::sort::STRSort;
+use geo_index::rtree::sort::HilbertSort;
 use geo_index::rtree::{RTree, RTreeBuilder, RTreeIndex};
 use geo_types::Rect;
 use parking_lot::Mutex;
@@ -29,7 +29,7 @@ use crate::spatial::join::utils::need_produce_result_in_final;
 use crate::spatial::statistics::GeoStatistics;
 
 // Type aliases for better readability
-type SpatialRTree = RTree<f64>;
+type SpatialRTree = RTree<f32>;
 type DataIdToBatchPos = Vec<(i32, i32)>;
 type RTreeBuildResult = (SpatialRTree, DataIdToBatchPos);
 
@@ -140,7 +140,7 @@ impl SpatialIndexBuilder {
             .map(|batch| batch.rects().len())
             .sum::<usize>();
 
-        let mut rtree_builder = RTreeBuilder::<f64>::new(num_rects as u32);
+        let mut rtree_builder = RTreeBuilder::<f32>::new(num_rects as u32);
         let mut batch_pos_vec = vec![(0, 0); num_rects];
         let rtree_mem_estimate = num_rects * RTREE_MEMORY_ESTIMATE_PER_RECT;
 
@@ -157,7 +157,7 @@ impl SpatialIndexBuilder {
             }
         }
 
-        let rtree = rtree_builder.finish::<STRSort>();
+        let rtree = rtree_builder.finish::<HilbertSort>();
         build_timer.done();
 
         self.metrics.build_mem_used.add(self.reservation.size());
@@ -279,7 +279,7 @@ pub(crate) struct SpatialIndex {
     /// using `data_id_to_batch_pos` to get the original geometry batch
     /// index and row index, or translated using `prepared_geom_idx_vec`
     /// to get the prepared geometries array index.
-    rtree: RTree<f64>,
+    rtree: RTree<f32>,
 
     /// Indexed batches containing evaluated geometry arrays. It contains the
     /// original record batches and geometry arrays obtained by evaluating
@@ -333,7 +333,7 @@ impl IndexedBatch {
         wkbs[idx].as_ref()
     }
 
-    pub fn rects(&self) -> &Vec<(usize, Rect)> {
+    pub fn rects(&self) -> &Vec<(usize, Rect<f32>)> {
         &self.geom_array.rects
     }
 
@@ -356,7 +356,7 @@ impl SpatialIndex {
         let refiner = create_refiner(&spatial_predicate, options, 0, GeoStatistics::empty());
         let refiner_reservation = reservation.split(0);
         let refiner_reservation = ConcurrentReservation::new(0, refiner_reservation);
-        let rtree = RTreeBuilder::<f64>::new(0).finish::<STRSort>();
+        let rtree = RTreeBuilder::<f32>::new(0).finish::<HilbertSort>();
         Self {
             schema,
             evaluator,
@@ -403,7 +403,7 @@ impl SpatialIndex {
     /// * `JoinResultMetrics` containing the number of actual matches (`count`)
     ///   and the number of candidates from the filter phase (`candidate_count`)
     pub fn query(
-        &self, probe_wkb: &Wkb, probe_rect: &Rect, distance: &Option<ColumnarValue>,
+        &self, probe_wkb: &Wkb, probe_rect: &Rect<f32>, distance: &Option<ColumnarValue>,
         build_batch_positions: &mut Vec<(i32, i32)>,
     ) -> Result<JoinResultMetrics> {
         let min = probe_rect.min();
@@ -451,6 +451,13 @@ impl SpatialIndex {
                 distance,
                 geom_idx,
                 position: pos,
+            });
+        }
+
+        if index_query_results.is_empty() {
+            return Ok(JoinResultMetrics {
+                count: 0,
+                candidate_count,
             });
         }
 

@@ -422,24 +422,23 @@ fn append_probe_indices_in_order(
 
 pub(crate) fn asymmetric_join_output_partitioning(
     left: &Arc<dyn ExecutionPlan>, right: &Arc<dyn ExecutionPlan>, join_type: &JoinType,
-) -> Result<Partitioning> {
+) -> Partitioning {
     match join_type {
         JoinType::Inner | JoinType::Right => {
             adjust_right_output_partitioning(
                 right.output_partitioning(),
                 left.schema().fields().len(),
             )
+            .unwrap_or(Partitioning::UnknownPartitioning(1))
         }
-        JoinType::RightSemi | JoinType::RightAnti => Ok(right.output_partitioning().clone()),
+        JoinType::RightSemi | JoinType::RightAnti => right.output_partitioning().clone(),
         JoinType::Left
         | JoinType::LeftSemi
         | JoinType::LeftAnti
         | JoinType::Full
         | JoinType::LeftMark
         | JoinType::RightMark => {
-            Ok(Partitioning::UnknownPartitioning(
-                right.output_partitioning().partition_count(),
-            ))
+            Partitioning::UnknownPartitioning(right.output_partitioning().partition_count())
         }
     }
 }

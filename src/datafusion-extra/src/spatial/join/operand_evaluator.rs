@@ -7,7 +7,9 @@ use datafusion::common::utils::proxy::VecAllocExt;
 use datafusion::common::{DataFusionError, JoinSide, Result, ScalarValue};
 use datafusion::logical_expr::ColumnarValue;
 use datafusion::physical_expr::PhysicalExpr;
-use geo::BoundingRect;
+use float_next_after::NextAfter;
+use geo::{BoundingRect, coord};
+use geo_index::rtree::util::f64_box_to_f32;
 use geo_traits::to_geo::ToGeoGeometry;
 use geo_types::Rect;
 use wkb::reader::Wkb;
@@ -69,7 +71,7 @@ pub(crate) struct EvaluatedGeometryArray {
     /// be covered by a collection of multiple rects. The first element of
     /// the tuple is the index of the geometry in the geometry array.
     /// This array is guaranteed to be sorted by the index of the geometry.
-    pub rects: Vec<(usize, Rect)>,
+    pub rects: Vec<(usize, Rect<f32>)>,
     /// The distance value produced by evaluating the distance expression.
     pub distance: Option<ColumnarValue>,
     /// WKBs of the geometries in `wkb_array`. The wkb values reference buffers
@@ -92,6 +94,13 @@ impl EvaluatedGeometryArray {
             if let Some(wkb) = wkb_opt.as_ref() {
                 let geo = wkb.to_geometry();
                 if let Some(rect) = geo.bounding_rect() {
+                    let min = rect.min();
+                    let max = rect.max();
+                    // f64_box_to_f32 will ensure the resulting `f32` box is no smaller than the
+                    // `f64` box.
+                    let (min_x, min_y, max_x, max_y) = f64_box_to_f32(min.x, min.y, max.x, max.y);
+                    let rect =
+                        Rect::new(coord! { x: min_x, y: min_y }, coord! { x: max_x, y: max_y });
                     rect_vec.push((idx, rect));
                 }
             }
@@ -240,13 +249,21 @@ impl DistanceOperandEvaluator {
     }
 }
 
-fn expand_rect_in_place(rect: &mut Rect, distance: f64) {
+fn expand_rect_in_place(rect: &mut Rect<f32>, distance: f64) {
     let mut min = rect.min();
     let mut max = rect.max();
-    min.x -= distance;
-    min.y -= distance;
-    max.x += distance;
-    max.y += distance;
+    let mut distance_f32 = distance as f32;
+    // distance_f32 may be smaller than the original f64 value due to loss of
+    // precision. We need to expand the rect using next_after to ensure that the
+    // rect expansion is always inclusive, otherwise we may miss some query
+    // results.
+    if (distance_f32 as f64) < distance {
+        distance_f32 = distance_f32.next_after(f32::INFINITY);
+    }
+    min.x -= distance_f32;
+    min.y -= distance_f32;
+    max.x += distance_f32;
+    max.y += distance_f32;
     rect.set_min(min);
     rect.set_max(max);
 }

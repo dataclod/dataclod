@@ -2,6 +2,10 @@
 /// to select an optimal execution mode.
 pub const DEFAULT_SPECULATIVE_THRESHOLD: usize = 1024;
 
+/// Default minimum number of points per geometry to use prepared geometries for
+/// the build side.
+pub const DEFAULT_MIN_POINTS_FOR_BUILD_PREPARATION: usize = 64;
+
 /// Configuration options for spatial join.
 ///
 /// This struct controls various aspects of how spatial joins are performed,
@@ -10,12 +14,16 @@ pub const DEFAULT_SPECULATIVE_THRESHOLD: usize = 1024;
 pub struct SpatialJoinOptions {
     /// The execution mode determining how prepared geometries are used
     pub execution_mode: ExecutionMode,
+    /// The minimum number of points per geometry to use prepared geometries for
+    /// the build side.
+    pub min_points_for_build_preparation: usize,
 }
 
 impl Default for SpatialJoinOptions {
     fn default() -> Self {
         Self {
             execution_mode: ExecutionMode::Speculative(DEFAULT_SPECULATIVE_THRESHOLD),
+            min_points_for_build_preparation: DEFAULT_MIN_POINTS_FOR_BUILD_PREPARATION,
         }
     }
 }

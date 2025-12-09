@@ -1528,6 +1528,7 @@ dependencies = [
  "async-trait",
  "common-utils",
  "datafusion",
+ "float_next_after",
  "futures",
  "geo",
  "geo-index",

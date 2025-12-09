@@ -4,7 +4,8 @@ use datafusion::common::tree_node::{Transformed, TreeNode};
 use datafusion::common::{HashMap, JoinSide, Result};
 use datafusion::config::ConfigOptions;
 use datafusion::execution::session_state::SessionStateBuilder;
-use datafusion::logical_expr::Operator;
+use datafusion::logical_expr::{Filter, Join, JoinType, LogicalPlan, Operator};
+use datafusion::optimizer::{ApplyOrder, OptimizerConfig, OptimizerRule};
 use datafusion::physical_expr::expressions::{BinaryExpr, Column};
 use datafusion::physical_expr::{PhysicalExpr, ScalarFunctionExpr};
 use datafusion::physical_optimizer::PhysicalOptimizerRule;
@@ -13,6 +14,7 @@ use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_plan::coalesce_partitions::CoalescePartitionsExec;
 use datafusion::physical_plan::joins::NestedLoopJoinExec;
 use datafusion::physical_plan::joins::utils::{ColumnIndex, JoinFilter};
+use datafusion::prelude::Expr;
 
 use crate::spatial::join::exec::SpatialJoinExec;
 use crate::spatial::join::spatial_predicate::{
@@ -46,6 +48,140 @@ impl PhysicalOptimizerRule for SpatialJoinOptimizer {
     /// the schema and should disable the schema check.
     fn schema_check(&self) -> bool {
         true
+    }
+}
+
+impl OptimizerRule for SpatialJoinOptimizer {
+    fn name(&self) -> &str {
+        "spatial_join_optimizer"
+    }
+
+    fn apply_order(&self) -> Option<ApplyOrder> {
+        Some(ApplyOrder::BottomUp)
+    }
+
+    /// Try to rewrite the plan containing a spatial Filter on top of a cross
+    /// join without on or filter to a theta-join with filter. For instance,
+    /// the following query plan:
+    ///
+    /// ```text
+    /// Filter: st_intersects(l.geom, _scalar_sq_1.geom)
+    ///   Left Join (no on, no filter):
+    ///     TableScan: l projection=[id, geom]
+    ///     SubqueryAlias: __scalar_sq_1
+    ///       Projection: r.geom
+    ///         Filter: r.id = Int32(1)
+    ///           TableScan: r projection=[id, geom]
+    /// ```
+    ///
+    /// will be rewritten to
+    ///
+    /// ```text
+    /// Inner Join: Filter: st_intersects(l.geom, _scalar_sq_1.geom)
+    ///   TableScan: l projection=[id, geom]
+    ///   SubqueryAlias: __scalar_sq_1
+    ///     Projection: r.geom
+    ///       Filter: r.id = Int32(1)
+    ///         TableScan: r projection=[id, geom]
+    /// ```
+    ///
+    /// This is for enabling this logical join operator to be converted to a
+    /// NestedLoopJoin physical node with a spatial predicate, so that it
+    /// could subsequently be optimized to a SpatialJoin physical node.
+    /// Please refer to the `PhysicalOptimizerRule` implementation of this
+    /// struct and [SpatialJoinOptimizer::try_optimize_join] for details.
+    fn rewrite(
+        &self, plan: LogicalPlan, _config: &dyn OptimizerConfig,
+    ) -> Result<Transformed<LogicalPlan>> {
+        let LogicalPlan::Filter(Filter {
+            predicate, input, ..
+        }) = &plan
+        else {
+            return Ok(Transformed::no(plan));
+        };
+        if !is_spatial_predicate(predicate) {
+            return Ok(Transformed::no(plan));
+        }
+
+        let LogicalPlan::Join(Join {
+            left,
+            right,
+            on,
+            filter,
+            join_type,
+            join_constraint,
+            null_equality,
+            ..
+        }) = input.as_ref()
+        else {
+            return Ok(Transformed::no(plan));
+        };
+
+        // Check if this is a suitable join for rewriting
+        if !matches!(
+            join_type,
+            JoinType::Inner | JoinType::Left | JoinType::Right
+        ) || !on.is_empty()
+            || filter.is_some()
+        {
+            return Ok(Transformed::no(plan));
+        }
+
+        let rewritten_plan = Join::try_new(
+            Arc::clone(left),
+            Arc::clone(right),
+            on.clone(),
+            Some(predicate.clone()),
+            JoinType::Inner,
+            *join_constraint,
+            *null_equality,
+        )?;
+
+        Ok(Transformed::yes(LogicalPlan::Join(rewritten_plan)))
+    }
+}
+
+/// Check if a given logical expression contains a spatial predicate component
+/// or not. We assume that the given `expr` evaluates to a boolean value and
+/// originates from a filter logical node.
+fn is_spatial_predicate(expr: &Expr) -> bool {
+    fn is_distance_expr(expr: &Expr) -> bool {
+        let Expr::ScalarFunction(datafusion::logical_expr::expr::ScalarFunction { func, .. }) =
+            expr
+        else {
+            return false;
+        };
+        func.name().to_lowercase() == "st_distance"
+    }
+
+    match expr {
+        Expr::BinaryExpr(datafusion::logical_expr::expr::BinaryExpr { left, right, op }) => {
+            match op {
+                Operator::And => is_spatial_predicate(left) || is_spatial_predicate(right),
+                Operator::Lt | Operator::LtEq => is_distance_expr(left),
+                Operator::Gt | Operator::GtEq => is_distance_expr(right),
+                _ => false,
+            }
+        }
+        Expr::ScalarFunction(datafusion::logical_expr::expr::ScalarFunction { func, .. }) => {
+            let func_name = func.name().to_lowercase();
+            matches!(
+                func_name.as_str(),
+                "st_intersects"
+                    | "st_contains"
+                    | "st_within"
+                    | "st_covers"
+                    | "st_covered_by"
+                    | "st_coveredby"
+                    | "st_touches"
+                    | "st_crosses"
+                    | "st_overlaps"
+                    | "st_equals"
+                    | "st_dwithin"
+                    | "st_knn"
+            )
+        }
+        _ => false,
     }
 }
 
@@ -118,6 +254,7 @@ pub fn register_spatial_join_optimizer(
     session_state_builder: SessionStateBuilder,
 ) -> SessionStateBuilder {
     session_state_builder
+        .with_optimizer_rule(Arc::new(SpatialJoinOptimizer))
         .with_physical_optimizer_rule(Arc::new(SpatialJoinOptimizer))
         .with_physical_optimizer_rule(Arc::new(SanityCheckPlan::new()))
 }

@@ -16,6 +16,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 common-utils.workspace = true
 datafusion.workspace = true
+float_next_after = "1.0.0"
 futures.workspace = true
 geo = "0.32.0"
 geo-index = "0.3.2"

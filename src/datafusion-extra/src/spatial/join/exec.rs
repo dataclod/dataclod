@@ -163,7 +163,7 @@ impl SpatialJoinExec {
             &[],
         )?;
 
-        let mut output_partitioning = asymmetric_join_output_partitioning(left, right, &join_type)?;
+        let mut output_partitioning = asymmetric_join_output_partitioning(left, right, &join_type);
 
         if let Some(projection) = projection {
             // construct a map from the input expressions to the output expression of the
