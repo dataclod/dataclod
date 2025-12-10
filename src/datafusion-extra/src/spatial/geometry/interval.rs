@@ -1,5 +1,6 @@
 use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 
 /// Generic 1D intervals with wraparound support
 ///
@@ -80,20 +81,21 @@ pub trait IntervalTrait: std::fmt::Debug + PartialEq {
 ///
 /// Represents a minimum and maximum value without wraparound logic (see
 /// [WraparoundInterval] for a wraparound implementation).
+#[serde_as]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Interval {
     /// Lower bound
     ///
     /// This is serialized and deserialized using its string representation to
     /// preserve NaN and Infinity values when using serde_json.
-    #[serde(with = "serde_with::rust::display_fromstr")]
+    #[serde_as(as = "DisplayFromStr")]
     lo: f64,
 
     /// Upper bound
     ///
     /// This is serialized and deserialized using its string representation to
     /// preserve NaN and Infinity values when using serde_json.
-    #[serde(with = "serde_with::rust::display_fromstr")]
+    #[serde_as(as = "DisplayFromStr")]
     hi: f64,
 }
 

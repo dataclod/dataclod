@@ -29,7 +29,7 @@ pub fn encode_parameters(portal: &Portal<Statement>) -> PgWireResult<Vec<ScalarV
         .iter()
         .enumerate()
         .map(|(i, parameter_type)| {
-            Ok(match parameter_type {
+            Ok(match parameter_type.as_ref().unwrap_or(&Type::UNKNOWN) {
                 &Type::UNKNOWN => ScalarValue::Null,
                 &Type::BOOL => ScalarValue::Boolean(portal.parameter(i, &Type::BOOL)?),
                 &Type::CHAR => ScalarValue::Int8(portal.parameter(i, &Type::CHAR)?),

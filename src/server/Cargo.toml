@@ -13,16 +13,17 @@ workspace = true
 
 [dependencies]
 async-trait.workspace = true
-bytes = "1.10"
+bytes = "1"
 chrono.workspace = true
 dataclod.workspace = true
 datafusion.workspace = true
 duplicate = "2.0"
 futures.workspace = true
 num-traits.workspace = true
-pgwire = "0.33.0"
+pg_interval = "0.4.2"
+pgwire = "0.36.3"
 postgres-types = "0.2"
 rand = "0.9"
-rust_decimal = "1.37"
+rust_decimal = "1"
 tokio.workspace = true
 tracing.workspace = true

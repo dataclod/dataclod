@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use datafusion::config::Dialect;
 use datafusion::dataframe::DataFrame;
 use datafusion::execution::SessionStateBuilder;
 use datafusion::execution::context::{SessionConfig, SessionContext};
@@ -11,8 +12,6 @@ use parking_lot::RwLock;
 
 use crate::rewrite::StatementRewrite;
 use crate::state::QueryState;
-
-const DEFAULT_DIALECT: &str = "postgres";
 
 pub struct QueryContext {
     inner: SessionContext,
@@ -71,7 +70,10 @@ impl QueryContext {
     }
 
     fn sql_to_statement(&self, sql: &str) -> Result<SqlStatement> {
-        let statement = self.inner.state().sql_to_statement(sql, DEFAULT_DIALECT)?;
+        let statement = self
+            .inner
+            .state()
+            .sql_to_statement(sql, &Dialect::PostgreSQL)?;
         Ok(statement)
     }
 

@@ -2,6 +2,7 @@ use std::error::Error;
 
 use bytes::{BufMut, BytesMut};
 use pgwire::types::ToSqlText;
+use pgwire::types::format::FormatOptions;
 use postgres_types::{IsNull, ToSql, Type, to_sql_checked};
 use rust_decimal::Decimal;
 
@@ -39,7 +40,7 @@ impl ToSql for PgDecimal {
 
 impl ToSqlText for PgDecimal {
     fn to_sql_text(
-        &self, _ty: &Type, out: &mut BytesMut,
+        &self, _ty: &Type, out: &mut BytesMut, _format_options: &FormatOptions,
     ) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
         let str = format_decimal_str(&self.num.to_string(), self.precision as usize, self.scale);
         out.put_slice(str.as_bytes());

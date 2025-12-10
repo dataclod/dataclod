@@ -2,7 +2,9 @@ use std::error::Error;
 
 use bytes::{Buf, BufMut, BytesMut};
 use datafusion::arrow::datatypes::{IntervalDayTime, IntervalMonthDayNano};
-use pgwire::types::ToSqlText;
+use pg_interval::Interval;
+use pgwire::types::format::FormatOptions;
+use pgwire::types::{FromSqlText, ToSqlText};
 use postgres_types::{FromSql, IsNull, ToSql, Type, to_sql_checked};
 
 #[derive(Debug)]
@@ -69,6 +71,25 @@ impl<'a> FromSql<'a> for PgInterval {
     }
 }
 
+impl<'a> FromSqlText<'a> for PgInterval {
+    fn from_sql_text(
+        _ty: &Type, input: &'a [u8], _format_options: &FormatOptions,
+    ) -> Result<Self, Box<dyn Error + Sync + Send>>
+    where
+        Self: Sized,
+    {
+        if let Ok(interval) = Interval::from_postgres(str::from_utf8(input)?) {
+            Ok(PgInterval {
+                months: interval.months,
+                days: interval.days,
+                microseconds: interval.microseconds,
+            })
+        } else {
+            Err("invalid interval format".into())
+        }
+    }
+}
+
 impl ToSql for PgInterval {
     to_sql_checked!();
 
@@ -88,7 +109,7 @@ impl ToSql for PgInterval {
 
 impl ToSqlText for PgInterval {
     fn to_sql_text(
-        &self, _ty: &Type, out: &mut BytesMut,
+        &self, _ty: &Type, out: &mut BytesMut, _format_options: &FormatOptions,
     ) -> Result<IsNull, Box<dyn Error + Sync + Send>> {
         let str = self.to_string();
         out.put_slice(str.as_bytes());

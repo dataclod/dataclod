@@ -1,9 +1,9 @@
+use mimalloc::MiMalloc;
 #[cfg(test)]
 use rusky as _;
-use tikv_jemallocator::Jemalloc;
 
 #[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
+static GLOBAL: MiMalloc = MiMalloc;
 
 const DEFAULT_CORE_PORT: &str = "9973";
 

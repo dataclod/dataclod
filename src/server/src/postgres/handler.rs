@@ -8,6 +8,7 @@ use pgwire::api::query::{ExtendedQueryHandler, SimpleQueryHandler};
 use pgwire::api::results::{DescribePortalResponse, DescribeStatementResponse, Response, Tag};
 use pgwire::api::stmt::StoredStatement;
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
+use postgres_types::Type;
 use tracing::debug;
 
 use super::parser::DataClodQueryParser;
@@ -148,7 +149,11 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
             })?;
         let schema = plan.schema();
 
-        let param_types = stmt.parameter_types.clone();
+        let param_types = stmt
+            .parameter_types
+            .iter()
+            .map(|t| t.clone().unwrap_or(Type::UNKNOWN))
+            .collect();
         let fields = encode_schema(schema, &Format::UnifiedBinary)?;
         Ok(DescribeStatementResponse::new(param_types, fields))
     }

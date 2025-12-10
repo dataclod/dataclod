@@ -16,8 +16,8 @@ console = ["common-telemetry/console"]
 
 [dependencies]
 common-telemetry.workspace = true
+mimalloc = "0.1"
 server.workspace = true
-tikv-jemallocator.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
