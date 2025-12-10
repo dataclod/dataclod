@@ -14,6 +14,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+byteorder = "1.5.0"
 common-utils.workspace = true
 datafusion.workspace = true
 float_next_after = "1.0.0"

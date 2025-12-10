@@ -19,7 +19,7 @@ use crate::spatial::geometry::analyze::AnalyzeAccumulator;
 use crate::spatial::join::index::SpatialIndex;
 use crate::spatial::join::once_fut::{OnceAsync, OnceFut};
 use crate::spatial::join::operand_evaluator::{
-    EvaluatedGeometryArray, OperandEvaluator, create_operand_evaluator,
+    EvaluatedGeometryArray, OperandEvaluator, create_operand_evaluator, distance_value_at,
 };
 use crate::spatial::join::option::SpatialJoinOptions;
 use crate::spatial::join::spatial_predicate::SpatialPredicate;
@@ -480,6 +480,11 @@ impl SpatialJoinBatchIterator {
                 continue;
             };
 
+            let dist = match distance {
+                Some(dist) => distance_value_at(dist, self.current_probe_idx)?,
+                None => None,
+            };
+
             // Process all rects for this probe index
             while self.current_rect_idx < rects.len()
                 && rects[self.current_rect_idx].0 == self.current_probe_idx
@@ -487,12 +492,9 @@ impl SpatialJoinBatchIterator {
                 let rect = &rects[self.current_rect_idx].1;
                 self.current_rect_idx += 1;
 
-                let join_result_metrics = self.spatial_index.query(
-                    wkb,
-                    rect,
-                    distance,
-                    &mut self.build_batch_positions,
-                )?;
+                let join_result_metrics =
+                    self.spatial_index
+                        .query(wkb, rect, &dist, &mut self.build_batch_positions)?;
 
                 self.probe_indices.extend(std::iter::repeat_n(
                     self.current_probe_idx as u32,

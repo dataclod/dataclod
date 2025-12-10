@@ -3,7 +3,7 @@ use proj4rs::Proj;
 use proj4rs::adaptors::transform_xy;
 
 #[allow(dead_code)]
-pub trait GeosExt: Geom {
+pub trait GeomExt: Geom {
     fn to_ewkb(&self) -> GResult<Vec<u8>>;
     fn as_text(&self) -> GResult<String>;
     fn as_ewkt(&self) -> GResult<String>;
@@ -14,21 +14,21 @@ pub trait GeosExt: Geom {
     fn st_transform(&self, src_proj: &Proj, dst_proj: &Proj) -> GResult<Geometry>;
     fn st_translate(&self, x_offset: f64, y_offset: f64) -> GResult<Geometry>;
 
-    fn bbox_overlaps<G: GeosExt>(&self, other: &G) -> GResult<bool>;
-    fn bbox_contains<G: GeosExt>(&self, other: &G) -> GResult<bool>;
-    fn bbox_same<G: GeosExt>(&self, other: &G) -> GResult<bool>;
+    fn bbox_overlaps<G: GeomExt>(&self, other: &G) -> GResult<bool>;
+    fn bbox_contains<G: GeomExt>(&self, other: &G) -> GResult<bool>;
+    fn bbox_same<G: GeomExt>(&self, other: &G) -> GResult<bool>;
 
-    fn st_intersects<G: GeosExt>(&self, other: &G) -> Option<bool>;
-    fn st_contains<G: GeosExt>(&self, other: &G) -> Option<bool>;
-    fn st_coveredby<G: GeosExt>(&self, other: &G) -> Option<bool>;
-    fn st_covers<G: GeosExt>(&self, other: &G) -> Option<bool>;
-    fn st_equals<G: GeosExt>(&self, other: &G) -> Option<bool>;
-    fn st_overlaps<G: GeosExt>(&self, other: &G) -> Option<bool>;
-    fn st_touches<G: GeosExt>(&self, other: &G) -> Option<bool>;
-    fn st_within<G: GeosExt>(&self, other: &G) -> Option<bool>;
+    fn st_intersects<G: GeomExt>(&self, other: &G) -> Option<bool>;
+    fn st_contains<G: GeomExt>(&self, other: &G) -> Option<bool>;
+    fn st_coveredby<G: GeomExt>(&self, other: &G) -> Option<bool>;
+    fn st_covers<G: GeomExt>(&self, other: &G) -> Option<bool>;
+    fn st_equals<G: GeomExt>(&self, other: &G) -> Option<bool>;
+    fn st_overlaps<G: GeomExt>(&self, other: &G) -> Option<bool>;
+    fn st_touches<G: GeomExt>(&self, other: &G) -> Option<bool>;
+    fn st_within<G: GeomExt>(&self, other: &G) -> Option<bool>;
 }
 
-impl GeosExt for Geometry {
+impl GeomExt for Geometry {
     fn to_ewkb(&self) -> GResult<Vec<u8>> {
         let mut writer = WKBWriter::new()?;
         writer.set_include_SRID(true);
@@ -108,7 +108,7 @@ impl GeosExt for Geometry {
         self.transform_xy(|x, y| Ok((x + delta_x, y + delta_y)))
     }
 
-    fn bbox_overlaps<G: GeosExt>(&self, other: &G) -> GResult<bool> {
+    fn bbox_overlaps<G: GeomExt>(&self, other: &G) -> GResult<bool> {
         if self.get_x_max()? < other.get_x_min()?
             || self.get_y_max()? < other.get_y_min()?
             || self.get_x_min()? > other.get_x_max()?
@@ -120,7 +120,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn bbox_contains<G: GeosExt>(&self, other: &G) -> GResult<bool> {
+    fn bbox_contains<G: GeomExt>(&self, other: &G) -> GResult<bool> {
         if self.get_x_max()? < other.get_x_max()?
             || self.get_y_max()? < other.get_y_max()?
             || self.get_x_min()? > other.get_x_min()?
@@ -132,7 +132,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn bbox_same<G: GeosExt>(&self, other: &G) -> GResult<bool> {
+    fn bbox_same<G: GeomExt>(&self, other: &G) -> GResult<bool> {
         // TODO(xhwhis): approximately equal
         if self.get_x_max()? == other.get_x_max()?
             && self.get_y_max()? == other.get_y_max()?
@@ -145,7 +145,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn st_intersects<G: GeosExt>(&self, other: &G) -> Option<bool> {
+    fn st_intersects<G: GeomExt>(&self, other: &G) -> Option<bool> {
         if let Ok(overlaps) = self.bbox_overlaps(other) {
             if overlaps {
                 self.to_prepared_geom()
@@ -159,7 +159,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn st_contains<G: GeosExt>(&self, other: &G) -> Option<bool> {
+    fn st_contains<G: GeomExt>(&self, other: &G) -> Option<bool> {
         if let Ok(contains) = self.bbox_contains(other) {
             if contains {
                 self.to_prepared_geom()
@@ -173,7 +173,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn st_coveredby<G: GeosExt>(&self, other: &G) -> Option<bool> {
+    fn st_coveredby<G: GeomExt>(&self, other: &G) -> Option<bool> {
         if let Ok(contains) = other.bbox_contains(self) {
             if contains {
                 self.to_prepared_geom()
@@ -187,7 +187,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn st_covers<G: GeosExt>(&self, other: &G) -> Option<bool> {
+    fn st_covers<G: GeomExt>(&self, other: &G) -> Option<bool> {
         if let Ok(contains) = other.bbox_contains(self) {
             if contains {
                 self.to_prepared_geom()
@@ -201,7 +201,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn st_equals<G: GeosExt>(&self, other: &G) -> Option<bool> {
+    fn st_equals<G: GeomExt>(&self, other: &G) -> Option<bool> {
         if let Ok(same) = self.bbox_same(other) {
             if same {
                 self.equals(other).ok()
@@ -213,7 +213,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn st_overlaps<G: GeosExt>(&self, other: &G) -> Option<bool> {
+    fn st_overlaps<G: GeomExt>(&self, other: &G) -> Option<bool> {
         if let Ok(overlaps) = self.bbox_overlaps(other) {
             if overlaps {
                 self.to_prepared_geom()
@@ -227,7 +227,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn st_touches<G: GeosExt>(&self, other: &G) -> Option<bool> {
+    fn st_touches<G: GeomExt>(&self, other: &G) -> Option<bool> {
         if let Ok(overlaps) = self.bbox_overlaps(other) {
             if overlaps {
                 self.to_prepared_geom()
@@ -241,7 +241,7 @@ impl GeosExt for Geometry {
         }
     }
 
-    fn st_within<G: GeosExt>(&self, other: &G) -> Option<bool> {
+    fn st_within<G: GeomExt>(&self, other: &G) -> Option<bool> {
         if let Ok(contains) = other.bbox_contains(self) {
             if contains {
                 self.to_prepared_geom()

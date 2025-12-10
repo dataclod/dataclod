@@ -6,6 +6,7 @@ use geos::{Geom, PreparedGeometry};
 use parking_lot::Mutex;
 use wkb::reader::Wkb;
 
+use crate::spatial::geos_ext::GEOSWkbFactory;
 use crate::spatial::join::index::IndexQueryResult;
 use crate::spatial::join::init_once_array::InitOnceArray;
 use crate::spatial::join::option::{ExecutionMode, SpatialJoinOptions};
@@ -156,11 +157,9 @@ impl OwnedPreparedGeometry {
         })
     }
 
-    /// Create a new OwnedPreparedGeometry from WKB bytes.
-    pub fn try_from_wkb(wkb: &[u8]) -> Result<Self> {
-        let geometry = geos::Geometry::new_from_wkb(wkb).map_err(|e| {
-            DataFusionError::Execution(format!("Failed to create geometry from WKB: {e}"))
-        })?;
+    /// Create a new OwnedPreparedGeometry from a Wkb value.
+    pub fn try_from_wkb(wkb: &Wkb) -> Result<Self> {
+        let geometry = wkb_to_geos_geometry(wkb)?;
         Self::try_new(geometry)
     }
 
@@ -177,6 +176,21 @@ impl OwnedPreparedGeometry {
     pub fn geometry(&self) -> &geos::Geometry {
         &self.geometry
     }
+}
+
+// Thread-local GEOS WKB factory for reusing GEOSWkbFactory objects. This avoids
+// some memory allocation/deallocation overhead for each `wkb_to_geos_geometry`
+// call.
+thread_local! {
+    static GEOS_WKB_FACTORY: GEOSWkbFactory = GEOSWkbFactory::new();
+}
+
+fn wkb_to_geos_geometry(wkb: &Wkb) -> Result<geos::Geometry> {
+    GEOS_WKB_FACTORY.with(|factory| {
+        factory.create(wkb).map_err(|e| {
+            DataFusionError::Execution(format!("Failed to create geometry from WKB: {e}"))
+        })
+    })
 }
 
 impl GeosRefiner {
@@ -230,8 +244,7 @@ impl GeosRefiner {
         &self, probe: &Wkb<'_>, index_query_results: &[IndexQueryResult],
     ) -> Result<Vec<(i32, i32)>> {
         let mut build_batch_positions = Vec::with_capacity(index_query_results.len());
-        let probe_geom = geos::Geometry::new_from_wkb(probe.buf())
-            .map_err(|e| DataFusionError::External(Box::new(e)))?;
+        let probe_geom = wkb_to_geos_geometry(probe)?;
 
         for index_result in index_query_results {
             if self
@@ -248,14 +261,13 @@ impl GeosRefiner {
         &self, probe: &Wkb<'_>, index_query_results: &[IndexQueryResult],
     ) -> Result<Vec<(i32, i32)>> {
         let mut build_batch_positions = Vec::with_capacity(index_query_results.len());
-        let probe_geom = geos::Geometry::new_from_wkb(probe.buf())
-            .map_err(|e| DataFusionError::External(Box::new(e)))?;
+        let probe_geom = wkb_to_geos_geometry(probe)?;
 
         for index_result in index_query_results {
             let (prepared_geom, is_newly_created) = self
                 .prepared_geoms
                 .get_or_create(index_result.geom_idx, || {
-                    OwnedPreparedGeometry::try_from_wkb(index_result.wkb.buf()).map(Some)
+                    OwnedPreparedGeometry::try_from_wkb(index_result.wkb).map(Some)
                 })?;
             let Some(prepared_geom) = prepared_geom else {
                 continue;
@@ -281,7 +293,7 @@ impl GeosRefiner {
         &self, probe: &Wkb<'_>, index_query_results: &[IndexQueryResult],
     ) -> Result<Vec<(i32, i32)>> {
         let mut build_batch_positions = Vec::with_capacity(index_query_results.len());
-        let probe_prepared = OwnedPreparedGeometry::try_from_wkb(probe.buf())
+        let probe_prepared = OwnedPreparedGeometry::try_from_wkb(probe)
             .map_err(|e| DataFusionError::External(Box::new(e)))?;
 
         for index_result in index_query_results {
@@ -375,8 +387,7 @@ impl GeosPredicateEvaluator for GeosDistance {
         let Some(distance) = distance else {
             return Ok(false);
         };
-        let build_geom = geos::Geometry::new_from_wkb(build.buf())
-            .map_err(|e| datafusion::common::DataFusionError::External(Box::new(e)))?;
+        let build_geom = wkb_to_geos_geometry(build)?;
         let dist = build_geom
             .distance(probe)
             .map_err(|e| DataFusionError::External(Box::new(e)))?;
@@ -402,8 +413,7 @@ impl GeosPredicateEvaluator for GeosDistance {
         let Some(distance) = distance else {
             return Ok(false);
         };
-        let build_geom = geos::Geometry::new_from_wkb(build.buf())
-            .map_err(|e| datafusion::common::DataFusionError::External(Box::new(e)))?;
+        let build_geom = wkb_to_geos_geometry(build)?;
         let probe_geom = probe.geometry();
         let dist = build_geom
             .distance(probe_geom)
@@ -420,8 +430,7 @@ impl GeosPredicateEvaluator for GeosEquals {
     fn evaluate(
         &self, build: &Wkb, probe: &geos::Geometry, _distance: Option<f64>,
     ) -> Result<bool> {
-        let build_geom = geos::Geometry::new_from_wkb(build.buf())
-            .map_err(|e| datafusion::common::DataFusionError::External(Box::new(e)))?;
+        let build_geom = wkb_to_geos_geometry(build)?;
         let result = build_geom
             .equals(probe)
             .map_err(|e| DataFusionError::External(Box::new(e)))?;
@@ -441,8 +450,7 @@ impl GeosPredicateEvaluator for GeosEquals {
     fn evaluate_prepare_probe(
         &self, build: &Wkb, probe: &OwnedPreparedGeometry, _distance: Option<f64>,
     ) -> Result<bool> {
-        let build_geom = geos::Geometry::new_from_wkb(build.buf())
-            .map_err(|e| datafusion::common::DataFusionError::External(Box::new(e)))?;
+        let build_geom = wkb_to_geos_geometry(build)?;
         let equals = probe
             .geometry()
             .equals(&build_geom)
@@ -461,8 +469,7 @@ macro_rules! impl_geos_evaluator {
             fn evaluate(
                 &self, build: &Wkb, probe: &geos::Geometry, _distance: Option<f64>,
             ) -> Result<bool> {
-                let build_geom = geos::Geometry::new_from_wkb(build.buf())
-                    .map_err(|e| datafusion::common::DataFusionError::External(Box::new(e)))?;
+                let build_geom = wkb_to_geos_geometry(build)?;
                 let result = build_geom
                     .$geos_method(probe)
                     .map_err(|e| DataFusionError::External(Box::new(e)))?;
@@ -482,8 +489,7 @@ macro_rules! impl_geos_evaluator {
             fn evaluate_prepare_probe(
                 &self, build: &Wkb, probe: &OwnedPreparedGeometry, _distance: Option<f64>,
             ) -> Result<bool> {
-                let build_geom = geos::Geometry::new_from_wkb(build.buf())
-                    .map_err(|e| datafusion::common::DataFusionError::External(Box::new(e)))?;
+                let build_geom = wkb_to_geos_geometry(build)?;
                 let prepared = probe.prepared().lock();
                 prepared
                     .$geos_method(&build_geom)

@@ -1,5 +1,5 @@
 mod concurrent_reservation;
-pub mod exec;
+mod exec;
 mod index;
 mod init_once_array;
 mod once_fut;

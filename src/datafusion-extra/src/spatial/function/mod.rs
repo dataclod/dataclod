@@ -1,6 +1,5 @@
 mod geom_from_ewkt;
 mod geom_from_text;
-mod geos_ext;
 mod intersects;
 
 use datafusion::prelude::SessionContext;

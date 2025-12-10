@@ -1,5 +1,6 @@
 mod function;
 mod geometry;
+mod geos_ext;
 mod join;
 mod statistics;
 

@@ -403,7 +403,7 @@ impl SpatialIndex {
     /// * `JoinResultMetrics` containing the number of actual matches (`count`)
     ///   and the number of candidates from the filter phase (`candidate_count`)
     pub fn query(
-        &self, probe_wkb: &Wkb, probe_rect: &Rect<f32>, distance: &Option<ColumnarValue>,
+        &self, probe_wkb: &Wkb, probe_rect: &Rect<f32>, distance: &Option<f64>,
         build_batch_positions: &mut Vec<(i32, i32)>,
     ) -> Result<JoinResultMetrics> {
         let min = probe_rect.min();
@@ -427,7 +427,7 @@ impl SpatialIndex {
     }
 
     fn refine(
-        &self, probe_wkb: &Wkb, candidates: &[u32], distance: &Option<ColumnarValue>,
+        &self, probe_wkb: &Wkb, candidates: &[u32], distance: &Option<f64>,
         build_batch_positions: &mut Vec<(i32, i32)>,
     ) -> Result<JoinResultMetrics> {
         let candidate_count = candidates.len();
@@ -442,8 +442,8 @@ impl SpatialIndex {
             };
             let distance = self.evaluator.resolve_distance(
                 indexed_batch.distance(),
-                distance,
                 row_idx as usize,
+                distance,
             )?;
             let geom_idx = self.geom_idx_vec[*data_idx as usize];
             index_query_results.push(IndexQueryResult {

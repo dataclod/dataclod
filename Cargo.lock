@@ -1493,6 +1493,7 @@ version = "0.0.2"
 dependencies = [
  "anyhow",
  "async-trait",
+ "byteorder",
  "common-utils",
  "datafusion",
  "float_next_after",

@@ -9,7 +9,7 @@ use datafusion::logical_expr::{
 };
 use geos::Geometry;
 
-use super::geos_ext::GeosExt;
+use crate::spatial::geos_ext::GeomExt;
 
 pub fn st_geomfromewkt() -> ScalarUDF {
     ScalarUDF::new_from_impl(GeomFromEWKTUdf {
