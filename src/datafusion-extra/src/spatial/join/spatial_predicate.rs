@@ -30,9 +30,9 @@ pub struct DistancePredicate {
     pub right: Arc<dyn PhysicalExpr>,
     /// The expression for evaluating the distance value. The expression
     /// should be evaluated directly on the left or right side batches according
-    /// to distance_side.
+    /// to `distance_side`.
     pub distance: Arc<dyn PhysicalExpr>,
-    /// The side of the distance expression. It could be JoinSide::None if the
+    /// The side of the distance expression. It could be `JoinSide::None` if the
     /// distance expression is not a column reference. The most common case
     /// is that the distance expression is a literal value.
     pub distance_side: JoinSide,

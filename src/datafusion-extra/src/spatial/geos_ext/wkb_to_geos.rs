@@ -22,7 +22,7 @@ impl Default for GEOSWkbFactory {
 }
 
 impl GEOSWkbFactory {
-    /// Create a new GEOSWkbFactory.
+    /// Create a new `GEOSWkbFactory`.
     pub fn new() -> Self {
         Self {
             scratch: RefCell::new(Vec::new()),

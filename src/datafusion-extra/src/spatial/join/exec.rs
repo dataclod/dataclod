@@ -15,12 +15,14 @@ use datafusion::physical_plan::{
 };
 use parking_lot::Mutex;
 
-use crate::spatial::join::index::{SpatialIndex, SpatialJoinBuildMetrics, build_index};
-use crate::spatial::join::once_fut::OnceAsync;
-use crate::spatial::join::option::SpatialJoinOptions;
+use crate::spatial::join::build_index::build_index;
+use crate::spatial::join::index::spatial_index::SpatialIndex;
 use crate::spatial::join::spatial_predicate::SpatialPredicate;
 use crate::spatial::join::stream::{SpatialJoinProbeMetrics, SpatialJoinStream};
-use crate::spatial::join::utils::{asymmetric_join_output_partitioning, boundedness_from_children};
+use crate::spatial::join::utils::join_utils::{
+    asymmetric_join_output_partitioning, boundedness_from_children,
+};
+use crate::spatial::join::utils::once_fut::OnceAsync;
 
 /// Physical execution plan for performing spatial joins between two tables. It
 /// uses a spatial index to speed up the join operation.
@@ -70,7 +72,7 @@ pub struct SpatialJoinExec {
 }
 
 impl SpatialJoinExec {
-    // Try to create a new [`SpatialJoinExec`]
+    /// Try to create a new [`SpatialJoinExec`]
     pub fn try_new(
         left: Arc<dyn ExecutionPlan>, right: Arc<dyn ExecutionPlan>, on: SpatialPredicate,
         filter: Option<JoinFilter>, join_type: &JoinType, projection: Option<Vec<usize>>,
@@ -84,7 +86,7 @@ impl SpatialJoinExec {
         let cache = Self::compute_properties(
             &left,
             &right,
-            Arc::clone(&join_schema),
+            join_schema.clone(),
             *join_type,
             projection.as_ref(),
         )?;
@@ -145,9 +147,9 @@ impl SpatialJoinExec {
     /// NOTICE: The implementation of this function should be identical to the
     /// one in
     /// [`datafusion_physical_plan::physical_plan::join::NestedLoopJoinExec::compute_properties`].
-    /// This is because SpatialJoinExec is transformed from NestedLoopJoinExec
-    /// in physical plan optimization phase. If the properties are not the
-    /// same, the plan will be incorrect.
+    /// This is because `SpatialJoinExec` is transformed from
+    /// `NestedLoopJoinExec` in physical plan optimization phase. If the
+    /// properties are not the same, the plan will be incorrect.
     fn compute_properties(
         left: &Arc<dyn ExecutionPlan>, right: &Arc<dyn ExecutionPlan>, schema: SchemaRef,
         join_type: JoinType, projection: Option<&Vec<usize>>,
@@ -156,7 +158,7 @@ impl SpatialJoinExec {
             left.equivalence_properties().clone(),
             right.equivalence_properties().clone(),
             &join_type,
-            Arc::clone(&schema),
+            schema.clone(),
             &[false, false],
             None,
             // No on columns (equi-join condition) in spatial join
@@ -300,7 +302,6 @@ impl ExecutionPlan for SpatialJoinExec {
     ) -> Result<SendableRecordBatchStream> {
         let session_config = context.session_config();
         let target_output_batch_size = session_config.options().execution.batch_size;
-        let options = SpatialJoinOptions::default();
 
         let once_fut_spatial_index = {
             let mut once_async = self.once_async_spatial_index.lock();
@@ -311,24 +312,21 @@ impl ExecutionPlan for SpatialJoinExec {
 
                     let num_partitions = build_side.output_partitioning().partition_count();
                     let mut build_streams = Vec::with_capacity(num_partitions);
-                    let mut build_metrics = Vec::with_capacity(num_partitions);
                     for k in 0..num_partitions {
-                        let stream = build_side.execute(k, Arc::clone(&context))?;
+                        let stream = build_side.execute(k, context.clone())?;
                         build_streams.push(stream);
-                        build_metrics.push(SpatialJoinBuildMetrics::new(k, &self.metrics));
                     }
 
                     let probe_thread_count = self.right.output_partitioning().partition_count();
 
                     Ok(build_index(
+                        context.clone(),
                         build_side.schema(),
                         build_streams,
                         self.on.clone(),
-                        options.clone(),
-                        build_metrics,
-                        Arc::clone(context.memory_pool()),
                         self.join_type,
                         probe_thread_count,
+                        self.metrics.clone(),
                     ))
                 })?
         };
@@ -345,7 +343,7 @@ impl ExecutionPlan for SpatialJoinExec {
         };
 
         let join_metrics = SpatialJoinProbeMetrics::new(partition, &self.metrics);
-        let probe_stream = self.right.execute(partition, Arc::clone(&context))?;
+        let probe_stream = self.right.execute(partition, context.clone())?;
 
         // Right side has an order and it is maintained during operation.
         let probe_side_ordered =
@@ -360,10 +358,9 @@ impl ExecutionPlan for SpatialJoinExec {
             column_indices_after_projection,
             probe_side_ordered,
             join_metrics,
-            options,
             target_output_batch_size,
             once_fut_spatial_index,
-            Arc::clone(&self.once_async_spatial_index),
+            self.once_async_spatial_index.clone(),
         )))
     }
 }

@@ -9,7 +9,7 @@ use parking_lot::Mutex;
 /// will reserve more memory than requested to skip growing the reservation for
 /// the next few reservation growth requests, until the actually reserved size
 /// is smaller than the requested size.
-pub(crate) struct ConcurrentReservation {
+pub struct ConcurrentReservation {
     reservation: Mutex<MemoryReservation>,
     /// The size of reservation. This should be equal to `reservation.size()`.
     /// This is used to minimize contention and avoid growing the underlying

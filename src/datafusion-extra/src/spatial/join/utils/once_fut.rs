@@ -1,9 +1,9 @@
 use std::fmt::{self, Debug};
 use std::future::Future;
 use std::sync::Arc;
-/// This module contains the OnceAsync and OnceFut types, which are used to
-/// run an async closure once. The source code was copied from DataFusion
-/// https://github.com/apache/datafusion/blob/48.0.0/datafusion/physical-plan/src/joins/utils.rs
+/// This module contains the `OnceAsync` and `OnceFut` types, which are used to
+/// run an async closure once. The source code was copied from `DataFusion`
+/// <https://github.com/apache/datafusion/blob/48.0.0/datafusion/physical-plan/src/joins/utils.rs>
 use std::task::{Context, Poll};
 
 use datafusion::common::{DataFusionError, Result, SharedResult};
@@ -24,7 +24,7 @@ use parking_lot::Mutex;
 /// the hash table to be built before proceeding.
 ///
 /// Each output partition waits on the same `OnceAsync` before proceeding.
-pub(crate) struct OnceAsync<T> {
+pub struct OnceAsync<T> {
     fut: Mutex<Option<SharedResult<OnceFut<T>>>>,
 }
 
@@ -50,7 +50,7 @@ impl<T: 'static> OnceAsync<T> {
     /// If this is not the first call, will return a [`OnceFut`] referring
     /// to the same future as was returned by the first call - or the same
     /// error if the initial call to `f` failed.
-    pub(crate) fn try_once<F, Fut>(&self, f: F) -> Result<OnceFut<T>>
+    pub fn try_once<F, Fut>(&self, f: F) -> Result<OnceFut<T>>
     where
         F: FnOnce() -> Result<Fut>,
         Fut: Future<Output = Result<T>> + Send + 'static,
@@ -69,7 +69,7 @@ type OnceFutPending<T> = Shared<BoxFuture<'static, SharedResult<Arc<T>>>>;
 /// A [`OnceFut`] represents a shared asynchronous computation, that will be
 /// evaluated once for all [`Clone`]'s, with [`OnceFut::get`] providing a
 /// non-consuming interface to drive the underlying [`Future`] to completion
-pub(crate) struct OnceFut<T> {
+pub struct OnceFut<T> {
     state: OnceFutState<T>,
 }
 
@@ -97,7 +97,7 @@ impl<T> Clone for OnceFutState<T> {
 
 impl<T: 'static> OnceFut<T> {
     /// Create a new [`OnceFut`] from a [`Future`]
-    pub(crate) fn new<Fut>(fut: Fut) -> Self
+    pub fn new<Fut>(fut: Fut) -> Self
     where
         Fut: Future<Output = Result<T>> + Send + 'static,
     {
@@ -110,30 +110,9 @@ impl<T: 'static> OnceFut<T> {
         }
     }
 
-    /// Get the result of the computation if it is ready, without consuming it
-    #[allow(unused)]
-    pub(crate) fn get(&mut self, cx: &mut Context<'_>) -> Poll<Result<&T>> {
-        if let OnceFutState::Pending(fut) = &mut self.state {
-            let r = ready!(fut.poll_unpin(cx));
-            self.state = OnceFutState::Ready(r);
-        }
-
-        // Cannot use loop as this would trip up the borrow checker
-        match &self.state {
-            OnceFutState::Pending(_) => unreachable!(),
-            OnceFutState::Ready(r) => {
-                Poll::Ready(
-                    r.as_ref()
-                        .map(|r| r.as_ref())
-                        .map_err(DataFusionError::from),
-                )
-            }
-        }
-    }
-
     /// Get shared reference to the result of the computation if it is ready,
     /// without consuming it
-    pub(crate) fn get_shared(&mut self, cx: &mut Context<'_>) -> Poll<Result<Arc<T>>> {
+    pub fn get_shared(&mut self, cx: &mut Context<'_>) -> Poll<Result<Arc<T>>> {
         if let OnceFutState::Pending(fut) = &mut self.state {
             let r = ready!(fut.poll_unpin(cx));
             self.state = OnceFutState::Ready(r);

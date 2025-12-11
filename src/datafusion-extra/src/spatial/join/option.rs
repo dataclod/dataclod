@@ -38,8 +38,8 @@ impl Default for SpatialJoinOptions {
 /// The choice of execution mode depends on the specific characteristics of your
 /// spatial join workload, as well as the spatial relation predicate between the
 /// two tables. Some of the spatial relation computations cannot be accelerated
-/// by prepared geometries at all (for example, ST_Touches, ST_Crosses,
-/// ST_DWithin).
+/// by prepared geometries at all (for example, `ST_Touches`, `ST_Crosses`,
+/// `ST_DWithin`).
 #[derive(Debug, Clone, PartialEq, Copy)]
 #[allow(dead_code)]
 pub enum ExecutionMode {

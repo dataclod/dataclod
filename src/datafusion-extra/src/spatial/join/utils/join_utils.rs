@@ -16,7 +16,7 @@
 // under the License.
 
 /// Most of the code in this module are copied from the
-/// `datafusion_physical_plan::joins::utils` module. https://github.com/apache/datafusion/blob/48.0.0/datafusion/physical-plan/src/joins/utils.rs
+/// `datafusion_physical_plan::joins::utils` module. <https://github.com/apache/datafusion/blob/48.0.0/datafusion/physical-plan/src/joins/utils.rs>
 use std::{ops::Range, sync::Arc};
 
 use datafusion::arrow::array::{
@@ -43,7 +43,7 @@ use datafusion::physical_plan::{ExecutionPlan, ExecutionPlanProperties};
 /// For example of the `Left` join, in each iteration of right side, can get the
 /// matched result, but need to maintain the matched indices bit map to get the
 /// unmatched row for the left side.
-pub(crate) fn need_produce_result_in_final(join_type: JoinType) -> bool {
+pub fn need_produce_result_in_final(join_type: JoinType) -> bool {
     matches!(
         join_type,
         JoinType::Left
@@ -59,11 +59,11 @@ pub(crate) fn need_produce_result_in_final(join_type: JoinType) -> bool {
 ///
 /// For example:
 ///
-/// 1. left_bit_map: `[true, false, true, true, false]`
-/// 2. join_type: `Left`
+/// 1. `left_bit_map`: `[true, false, true, true, false]`
+/// 2. `join_type`: `Left`
 ///
 /// The result is: `([1,4], [null, null])`
-pub(crate) fn get_final_indices_from_bit_map(
+pub fn get_final_indices_from_bit_map(
     left_bit_map: &BooleanBufferBuilder, join_type: JoinType,
 ) -> (UInt64Array, UInt32Array) {
     let left_size = left_bit_map.len();
@@ -93,7 +93,7 @@ pub(crate) fn get_final_indices_from_bit_map(
     (left_indices, right_indices)
 }
 
-pub(crate) fn apply_join_filter_to_indices(
+pub fn apply_join_filter_to_indices(
     build_input_buffer: &RecordBatch, probe_batch: &RecordBatch, build_indices: UInt64Array,
     probe_indices: UInt32Array, filter: &JoinFilter, build_side: JoinSide,
 ) -> Result<(UInt64Array, UInt32Array)> {
@@ -124,9 +124,9 @@ pub(crate) fn apply_join_filter_to_indices(
     ))
 }
 
-/// Returns a new [RecordBatch] by combining the `left` and `right` according to
-/// `indices`. The resulting batch has [Schema] `schema`.
-pub(crate) fn build_batch_from_indices(
+/// Returns a new [`RecordBatch`] by combining the `left` and `right` according
+/// to `indices`. The resulting batch has [Schema] `schema`.
+pub fn build_batch_from_indices(
     schema: &Schema, build_input_buffer: &RecordBatch, probe_batch: &RecordBatch,
     build_indices: &UInt64Array, probe_indices: &UInt32Array, column_indices: &[ColumnIndex],
     build_side: JoinSide,
@@ -180,7 +180,7 @@ pub(crate) fn build_batch_from_indices(
 
 /// The input is the matched indices for left and right and
 /// adjust the indices according to the join type
-pub(crate) fn adjust_indices_by_join_type(
+pub fn adjust_indices_by_join_type(
     left_indices: UInt64Array, right_indices: UInt32Array, adjust_range: Range<usize>,
     join_type: JoinType, preserve_order_for_right: bool,
 ) -> (UInt64Array, UInt32Array) {
@@ -240,15 +240,15 @@ pub(crate) fn adjust_indices_by_join_type(
 ///    ones.
 ///
 /// # Parameters
-/// - `left_indices`: UInt64Array of left indices.
-/// - `right_indices`: UInt32Array of right indices.
+/// - `left_indices`: `UInt64Array` of left indices.
+/// - `right_indices`: `UInt32Array` of right indices.
 /// - `adjust_range`: Range to adjust the right indices.
 /// - `preserve_order_for_right`: Boolean flag to determine the mode of
 ///   operation.
 ///
 /// # Returns
 /// A tuple of updated `UInt64Array` and `UInt32Array`.
-pub(crate) fn append_right_indices(
+pub fn append_right_indices(
     left_indices: UInt64Array, right_indices: UInt32Array, adjust_range: Range<usize>,
     preserve_order_for_right: bool,
 ) -> (UInt64Array, UInt32Array) {
@@ -311,7 +311,7 @@ pub(crate) fn append_right_indices(
 }
 
 /// Returns `range` indices which are not present in `input_indices`
-pub(crate) fn get_anti_indices<T: ArrowPrimitiveType>(
+pub fn get_anti_indices<T: ArrowPrimitiveType>(
     range: Range<usize>, input_indices: &PrimitiveArray<T>,
 ) -> PrimitiveArray<T>
 where
@@ -337,7 +337,7 @@ where
 }
 
 /// Returns intersection of `range` and `input_indices` omitting duplicates
-pub(crate) fn get_semi_indices<T: ArrowPrimitiveType>(
+pub fn get_semi_indices<T: ArrowPrimitiveType>(
     range: Range<usize>, input_indices: &PrimitiveArray<T>,
 ) -> PrimitiveArray<T>
 where
@@ -420,7 +420,7 @@ fn append_probe_indices_in_order(
     (new_build_indices.finish(), new_probe_indices.finish())
 }
 
-pub(crate) fn asymmetric_join_output_partitioning(
+pub fn asymmetric_join_output_partitioning(
     left: &Arc<dyn ExecutionPlan>, right: &Arc<dyn ExecutionPlan>, join_type: &JoinType,
 ) -> Partitioning {
     match join_type {
@@ -447,7 +447,7 @@ pub(crate) fn asymmetric_join_output_partitioning(
 /// [`datafusion_physical_plan::physical_plan::execution_plan::boundedness_from_children`].
 /// It is used to determine the boundedness of the join operator based on the
 /// boundedness of its children.
-pub(crate) fn boundedness_from_children(
+pub fn boundedness_from_children(
     children: impl IntoIterator<Item = &Arc<dyn ExecutionPlan>>,
 ) -> Boundedness {
     let mut unbounded_with_finite_mem = false;

@@ -8,7 +8,6 @@ use wkb::reader::Wkb;
 
 use crate::spatial::geos_ext::GEOSWkbFactory;
 use crate::spatial::join::index::IndexQueryResult;
-use crate::spatial::join::init_once_array::InitOnceArray;
 use crate::spatial::join::option::{ExecutionMode, SpatialJoinOptions};
 use crate::spatial::join::refine::IndexQueryResultRefiner;
 use crate::spatial::join::refine::exec_mode_selector::{
@@ -17,6 +16,7 @@ use crate::spatial::join::refine::exec_mode_selector::{
 use crate::spatial::join::spatial_predicate::{
     RelationPredicate, SpatialPredicate, SpatialRelationType,
 };
+use crate::spatial::join::utils::init_once_array::InitOnceArray;
 use crate::spatial::statistics::GeoStatistics;
 
 /// GEOS-specific optimal mode selector that chooses the best execution mode
@@ -27,11 +27,11 @@ struct GeosOptimalModeSelector {
 }
 
 impl GeosOptimalModeSelector {
-    /// Both PrepareBuild and PrepareProbe works for ST_Intersects. We select
-    /// PrepareBuild when the build side is more complex than the probe side
-    /// and the build side is complex enough. This is because using prepared
-    /// geometries on the build side has large overhead, using it
-    /// on not so complex geometries will not worth it.
+    /// Both `PrepareBuild` and `PrepareProbe` works for `ST_Intersects`. We
+    /// select `PrepareBuild` when the build side is more complex than the
+    /// probe side and the build side is complex enough. This is because
+    /// using prepared geometries on the build side has large overhead,
+    /// using it on not so complex geometries will not worth it.
     fn select_intersects(&self, build_mean_points: f64, probe_mean_points: f64) -> ExecutionMode {
         if build_mean_points > probe_mean_points
             && build_mean_points >= self.min_points_for_build_preparation
@@ -42,11 +42,11 @@ impl GeosOptimalModeSelector {
         }
     }
 
-    /// We may use PrepareBuild to evaluate the spatial predicate faster, but
+    /// We may use `PrepareBuild` to evaluate the spatial predicate faster, but
     /// only when the build side is complex enough. Otherwise the overhead
     /// of using prepared geometries on the build side may not worth it. We
-    /// don't select PrepareProbe here because it does not work with ST_Contains
-    /// and ST_Covers.
+    /// don't select `PrepareProbe` here because it does not work with
+    /// `ST_Contains` and `ST_Covers`.
     fn select_contains_covers(&self, build_mean_points: f64) -> ExecutionMode {
         if build_mean_points >= self.min_points_for_build_preparation {
             ExecutionMode::PrepareBuild
@@ -99,7 +99,7 @@ impl SelectOptimalMode for GeosOptimalModeSelector {
 }
 
 /// A refiner that uses the GEOS library to evaluate spatial predicates.
-pub(crate) struct GeosRefiner {
+pub struct GeosRefiner {
     evaluator: Box<dyn GeosPredicateEvaluator>,
     prepared_geoms: InitOnceArray<Option<OwnedPreparedGeometry>>,
     mem_usage: AtomicUsize,
@@ -107,22 +107,22 @@ pub(crate) struct GeosRefiner {
     exec_mode_selector: Option<ExecModeSelector>,
 }
 
-/// A wrapper around a GEOS Geometry and its corresponding PreparedGeometry.
+/// A wrapper around a GEOS Geometry and its corresponding `PreparedGeometry`.
 ///
 /// This struct solves the self-referential lifetime problem by using unsafe
-/// transmutation to extend the PreparedGeometry lifetime to 'static. This is
+/// transmutation to extend the `PreparedGeometry` lifetime to 'static. This is
 /// safe because:
-/// 1. The PreparedGeometry is created from self.geometry, which lives as long
+/// 1. The `PreparedGeometry` is created from self.geometry, which lives as long
 ///    as self
-/// 2. The PreparedGeometry is stored in self and will be dropped before
+/// 2. The `PreparedGeometry` is stored in self and will be dropped before
 ///    self.geometry
-/// 3. We only return references, never move the PreparedGeometry out
+/// 3. We only return references, never move the `PreparedGeometry` out
 ///
-/// The PreparedGeometry is protected by a Mutex because it has internal mutable
-/// state that is not thread-safe.
-pub(crate) struct OwnedPreparedGeometry {
+/// The `PreparedGeometry` is protected by a Mutex because it has internal
+/// mutable state that is not thread-safe.
+pub struct OwnedPreparedGeometry {
     geometry: geos::Geometry,
-    /// PreparedGeometry references the original geometry `geometry` it is
+    /// `PreparedGeometry` references the original geometry `geometry` it is
     /// created from. The GEOS objects are allocated on the heap so moving
     /// `OwnedPreparedGeometry` does not move the underlying GEOS object, so
     /// we don't need to worry about pinning.
@@ -134,7 +134,7 @@ pub(crate) struct OwnedPreparedGeometry {
 }
 
 impl OwnedPreparedGeometry {
-    /// Create a new OwnedPreparedGeometry from a GEOS Geometry.
+    /// Create a new `OwnedPreparedGeometry` from a GEOS Geometry.
     pub fn try_new(geometry: geos::Geometry) -> Result<Self> {
         let prepared = geometry.to_prepared_geom().map_err(|e| {
             DataFusionError::Execution(format!("Failed to create prepared geometry: {e}"))
@@ -157,7 +157,7 @@ impl OwnedPreparedGeometry {
         })
     }
 
-    /// Create a new OwnedPreparedGeometry from a Wkb value.
+    /// Create a new `OwnedPreparedGeometry` from a Wkb value.
     pub fn try_from_wkb(wkb: &Wkb) -> Result<Self> {
         let geometry = wkb_to_geos_geometry(wkb)?;
         Self::try_new(geometry)
@@ -166,7 +166,7 @@ impl OwnedPreparedGeometry {
     /// Get access to the prepared geometry via a Mutex.
     ///
     /// The returned reference has a lifetime tied to &self, which ensures
-    /// memory safety. The 'static lifetime on PreparedGeometry indicates it
+    /// memory safety. The 'static lifetime on `PreparedGeometry` indicates it
     /// doesn't borrow from external data.
     pub fn prepared(&self) -> &Mutex<PreparedGeometry<'static>> {
         &self.prepared_geometry
@@ -273,9 +273,7 @@ impl GeosRefiner {
                 continue;
             };
             if is_newly_created {
-                // TODO: This ia a rough estimate of the memory usage of the prepared geometry
-                // and may not be accurate.
-                let prep_geom_size = index_result.wkb.buf().len() * 4;
+                let prep_geom_size = estimate_prep_geom_in_mem_size(index_result.wkb);
                 self.mem_usage.fetch_add(prep_geom_size, Ordering::Relaxed);
             }
             if self.evaluator.evaluate_prepare_build(
@@ -307,6 +305,13 @@ impl GeosRefiner {
         }
         Ok(build_batch_positions)
     }
+}
+
+fn estimate_prep_geom_in_mem_size(wkb: &Wkb<'_>) -> usize {
+    // TODO: This is a rough estimate of the memory usage of the prepared geometry
+    // and may not be accurate.
+    // https://github.com/apache/sedona-db/issues/281
+    wkb.buf().len() * 4
 }
 
 impl IndexQueryResultRefiner for GeosRefiner {

@@ -9,7 +9,7 @@ use crate::spatial::statistics::GeoStatistics;
 /// statistics. This allows for plugging in different selection strategies that
 /// can consider various factors such as spatial predicate type, geometry
 /// complexity, etc.
-pub(crate) trait SelectOptimalMode: Send + Sync {
+pub trait SelectOptimalMode: Send + Sync {
     /// Select the optimal execution mode based on build and probe statistics.
     ///
     /// # Arguments
@@ -33,7 +33,7 @@ pub(crate) trait SelectOptimalMode: Send + Sync {
 
 /// Select the optimal execution mode for the refinement phase of spatial join
 /// using the build-side and partial probe-side statistics.
-pub(crate) struct ExecModeSelector {
+pub struct ExecModeSelector {
     /// The build-side statistics.
     build_stats: GeoStatistics,
     /// The partial probe-side statistics.
@@ -48,7 +48,7 @@ pub(crate) struct ExecModeSelector {
 }
 
 impl ExecModeSelector {
-    pub(crate) fn new(
+    pub fn new(
         build_stats: GeoStatistics, min_required_count: usize, selector: Arc<dyn SelectOptimalMode>,
     ) -> Self {
         Self {
@@ -60,7 +60,7 @@ impl ExecModeSelector {
         }
     }
 
-    pub(crate) fn merge_probe_stats(&self, stats: GeoStatistics) {
+    pub fn merge_probe_stats(&self, stats: GeoStatistics) {
         let mut probe_stats = self.probe_stats.lock();
         probe_stats.merge(&stats);
         let analyzed_count = probe_stats.total_geometries().unwrap_or(0) as usize;
@@ -70,7 +70,7 @@ impl ExecModeSelector {
         }
     }
 
-    pub(crate) fn optimal_mode(&self) -> Option<ExecutionMode> {
+    pub fn optimal_mode(&self) -> Option<ExecutionMode> {
         self.optimal_mode.get().copied()
     }
 
@@ -82,7 +82,7 @@ impl ExecModeSelector {
 /// Get the current execution mode or update it with the optimal mode if it is
 /// not set. If optimal mode is not selected yet, return the default execution
 /// mode without updating the execution mode.
-pub(crate) fn get_or_update_execution_mode(
+pub fn get_or_update_execution_mode(
     exec_mode: &OnceLock<ExecutionMode>, exec_mode_selector: &Option<ExecModeSelector>,
     default_exec_mode: ExecutionMode,
 ) -> ExecutionMode {

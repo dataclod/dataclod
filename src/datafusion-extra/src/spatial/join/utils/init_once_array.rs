@@ -12,7 +12,7 @@ use datafusion::common::utils::proxy::VecAllocExt;
 ///
 /// Uses atomic pointers for lock-free operations with proper memory ordering.
 /// Null pointers indicate empty slots.
-pub(crate) struct InitOnceArray<T: Send + Sync> {
+pub struct InitOnceArray<T: Send + Sync> {
     ptrs: Vec<AtomicPtr<T>>,
 }
 

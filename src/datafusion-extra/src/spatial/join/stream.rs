@@ -16,20 +16,20 @@ use futures::task::Poll;
 use parking_lot::Mutex;
 
 use crate::spatial::geometry::analyze::AnalyzeAccumulator;
-use crate::spatial::join::index::SpatialIndex;
-use crate::spatial::join::once_fut::{OnceAsync, OnceFut};
+use crate::spatial::join::evaluated_batch::EvaluatedBatch;
+use crate::spatial::join::index::spatial_index::SpatialIndex;
 use crate::spatial::join::operand_evaluator::{
-    EvaluatedGeometryArray, OperandEvaluator, create_operand_evaluator, distance_value_at,
+    OperandEvaluator, create_operand_evaluator, distance_value_at,
 };
-use crate::spatial::join::option::SpatialJoinOptions;
 use crate::spatial::join::spatial_predicate::SpatialPredicate;
-use crate::spatial::join::utils::{
+use crate::spatial::join::utils::join_utils::{
     adjust_indices_by_join_type, apply_join_filter_to_indices, build_batch_from_indices,
     get_final_indices_from_bit_map, need_produce_result_in_final,
 };
+use crate::spatial::join::utils::once_fut::{OnceAsync, OnceFut};
 
 /// Stream for producing spatial join result batches.
-pub(crate) struct SpatialJoinStream {
+pub struct SpatialJoinStream {
     /// Input schema
     schema: Arc<Schema>,
     /// join filter
@@ -61,15 +61,15 @@ pub(crate) struct SpatialJoinStream {
 
 impl SpatialJoinStream {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
+    pub fn new(
         schema: Arc<Schema>, on: &SpatialPredicate, filter: Option<JoinFilter>,
         join_type: JoinType, probe_stream: SendableRecordBatchStream,
         column_indices: Vec<ColumnIndex>, probe_side_ordered: bool,
-        join_metrics: SpatialJoinProbeMetrics, options: SpatialJoinOptions,
-        target_output_batch_size: usize, once_fut_spatial_index: OnceFut<SpatialIndex>,
+        join_metrics: SpatialJoinProbeMetrics, target_output_batch_size: usize,
+        once_fut_spatial_index: OnceFut<SpatialIndex>,
         once_async_spatial_index: Arc<Mutex<Option<OnceAsync<SpatialIndex>>>>,
     ) -> Self {
-        let evaluator = create_operand_evaluator(on, options);
+        let evaluator = create_operand_evaluator(on);
         Self {
             schema,
             filter,
@@ -90,25 +90,25 @@ impl SpatialJoinStream {
 
 /// Metrics for the probe phase of the spatial join.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct SpatialJoinProbeMetrics {
+pub struct SpatialJoinProbeMetrics {
     /// Total time for joining probe-side batches to the build-side batches
-    pub(crate) join_time: metrics::Time,
+    pub join_time: metrics::Time,
     /// Number of batches consumed by probe-side of this operator
-    pub(crate) probe_input_batches: metrics::Count,
+    pub probe_input_batches: metrics::Count,
     /// Number of rows consumed by probe-side this operator
-    pub(crate) probe_input_rows: metrics::Count,
+    pub probe_input_rows: metrics::Count,
     /// Number of batches produced by this operator
-    pub(crate) output_batches: metrics::Count,
+    pub output_batches: metrics::Count,
     /// Number of rows produced by this operator
-    pub(crate) output_rows: metrics::Count,
+    pub output_rows: metrics::Count,
     /// Number of result candidates retrieved by querying the spatial index
-    pub(crate) join_result_candidates: metrics::Count,
+    pub join_result_candidates: metrics::Count,
     /// Number of join results before filtering
-    pub(crate) join_result_count: metrics::Count,
+    pub join_result_count: metrics::Count,
     /// Memory usage of the refiner in bytes
-    pub(crate) refiner_mem_used: metrics::Gauge,
+    pub refiner_mem_used: metrics::Gauge,
     /// Execution mode used for executing the spatial join
-    pub(crate) execution_mode: metrics::Gauge,
+    pub execution_mode: metrics::Gauge,
 }
 
 impl SpatialJoinProbeMetrics {
@@ -119,7 +119,7 @@ impl SpatialJoinProbeMetrics {
                 .counter("probe_input_batches", partition),
             probe_input_rows: MetricBuilder::new(metrics).counter("probe_input_rows", partition),
             output_batches: MetricBuilder::new(metrics).counter("output_batches", partition),
-            output_rows: MetricBuilder::new(metrics).counter("output_rows", partition),
+            output_rows: MetricBuilder::new(metrics).output_rows(partition),
             join_result_candidates: MetricBuilder::new(metrics)
                 .counter("join_result_candidates", partition),
             join_result_count: MetricBuilder::new(metrics).counter("join_result_count", partition),
@@ -133,7 +133,7 @@ impl SpatialJoinProbeMetrics {
 /// algorithm.
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum SpatialJoinStreamState {
+pub enum SpatialJoinStreamState {
     /// The initial mode: waiting for the spatial index to be built
     WaitBuildIndex,
     /// Indicates that build-side has been collected, and stream is ready for
@@ -146,7 +146,7 @@ pub(crate) enum SpatialJoinStreamState {
     /// Indicates that we're processing unmatched build-side batches using an
     /// iterator
     ProcessUnmatchedBuildBatch(UnmatchedBuildBatchIterator),
-    /// Indicates that SpatialJoinStream execution is completed
+    /// Indicates that `SpatialJoinStream` execution is completed
     Completed,
 }
 
@@ -375,12 +375,16 @@ impl SpatialJoinStream {
         }
 
         Ok(SpatialJoinBatchIterator::new(
-            Arc::clone(spatial_index),
-            probe_batch,
-            geom_array,
-            self.join_metrics.clone(),
-            self.target_output_batch_size,
-            self.probe_side_ordered,
+            SpatialJoinBatchIteratorParams {
+                spatial_index: spatial_index.clone(),
+                probe_evaluated_batch: EvaluatedBatch {
+                    batch: probe_batch,
+                    geom_array,
+                },
+                join_metrics: self.join_metrics.clone(),
+                max_batch_size: self.target_output_batch_size,
+                probe_side_ordered: self.probe_side_ordered,
+            },
         ))
     }
 }
@@ -411,17 +415,13 @@ struct PartialBuildBatch {
 }
 
 /// Iterator that processes spatial join results in configurable batch sizes
-pub(crate) struct SpatialJoinBatchIterator {
+pub struct SpatialJoinBatchIterator {
     /// The spatial index reference
     spatial_index: Arc<SpatialIndex>,
-    /// The probe batch being processed
-    probe_batch: RecordBatch,
-    /// The geometry batch result from evaluating the probe batch
-    geom_array: EvaluatedGeometryArray,
+    /// The probe side batch being processed
+    probe_evaluated_batch: EvaluatedBatch,
     /// Current probe row index being processed
     current_probe_idx: usize,
-    /// Current rect index being processed
-    current_rect_idx: usize,
     /// Join metrics for tracking performance
     join_metrics: SpatialJoinProbeMetrics,
     /// Maximum batch size before yielding a result
@@ -436,21 +436,24 @@ pub(crate) struct SpatialJoinBatchIterator {
     is_complete: bool,
 }
 
+/// Parameters for creating a `SpatialJoinBatchIterator`
+pub struct SpatialJoinBatchIteratorParams {
+    pub spatial_index: Arc<SpatialIndex>,
+    pub probe_evaluated_batch: EvaluatedBatch,
+    pub join_metrics: SpatialJoinProbeMetrics,
+    pub max_batch_size: usize,
+    pub probe_side_ordered: bool,
+}
+
 impl SpatialJoinBatchIterator {
-    pub(crate) fn new(
-        spatial_index: Arc<SpatialIndex>, probe_batch: RecordBatch,
-        geom_array: EvaluatedGeometryArray, join_metrics: SpatialJoinProbeMetrics,
-        max_batch_size: usize, probe_side_ordered: bool,
-    ) -> Self {
+    pub fn new(params: SpatialJoinBatchIteratorParams) -> Self {
         Self {
-            spatial_index,
-            probe_batch,
-            geom_array,
+            spatial_index: params.spatial_index,
+            probe_evaluated_batch: params.probe_evaluated_batch,
             current_probe_idx: 0,
-            current_rect_idx: 0,
-            join_metrics,
-            max_batch_size,
-            probe_side_ordered,
+            join_metrics: params.join_metrics,
+            max_batch_size: params.max_batch_size,
+            probe_side_ordered: params.probe_side_ordered,
             build_batch_positions: Vec::new(),
             probe_indices: Vec::new(),
             is_complete: false,
@@ -463,9 +466,10 @@ impl SpatialJoinBatchIterator {
     ) -> Result<Option<RecordBatch>> {
         // Process probe rows incrementally until we have enough results or finish
         let initial_size = self.build_batch_positions.len();
-        let wkbs = self.geom_array.wkbs();
-        let rects = &self.geom_array.rects;
-        let distance = &self.geom_array.distance;
+        let geom_array = &self.probe_evaluated_batch.geom_array;
+        let wkbs = geom_array.wkbs();
+        let rects = &geom_array.rects;
+        let distance = &geom_array.distance;
         let num_rows = wkbs.len();
         let last_probe_idx = self.current_probe_idx;
 
@@ -485,13 +489,9 @@ impl SpatialJoinBatchIterator {
                 None => None,
             };
 
-            // Process all rects for this probe index
-            while self.current_rect_idx < rects.len()
-                && rects[self.current_rect_idx].0 == self.current_probe_idx
-            {
-                let rect = &rects[self.current_rect_idx].1;
-                self.current_rect_idx += 1;
-
+            // Regular spatial join: process all rects for this probe index
+            let rect_opt = &rects[self.current_probe_idx];
+            if let Some(rect) = rect_opt {
                 let join_result_metrics =
                     self.spatial_index
                         .query(wkb, rect, &dist, &mut self.build_batch_positions)?;
@@ -549,7 +549,7 @@ impl SpatialJoinBatchIterator {
         self.is_complete
     }
 
-    /// Process joined indices and create a RecordBatch
+    /// Process joined indices and create a `RecordBatch`
     #[allow(clippy::too_many_arguments)]
     fn process_joined_indices_to_batch(
         &self, build_indices: &[(i32, i32)], probe_indices: Vec<u32>, schema: &Schema,
@@ -567,7 +567,7 @@ impl SpatialJoinBatchIterator {
             Some(filter) => {
                 apply_join_filter_to_indices(
                     &partial_build_batch,
-                    &self.probe_batch,
+                    &self.probe_evaluated_batch.batch,
                     build_indices,
                     probe_indices,
                     filter,
@@ -601,7 +601,7 @@ impl SpatialJoinBatchIterator {
         let result_batch = build_batch_from_indices(
             schema,
             &partial_build_batch,
-            &self.probe_batch,
+            &self.probe_evaluated_batch.batch,
             &build_indices,
             &probe_indices,
             column_indices,
@@ -730,7 +730,6 @@ impl std::fmt::Debug for SpatialJoinBatchIterator {
         f.debug_struct("SpatialJoinBatchIterator")
             .field("max_batch_size", &self.max_batch_size)
             .field("current_probe_idx", &self.current_probe_idx)
-            .field("current_rect_idx", &self.current_rect_idx)
             .field("is_complete", &self.is_complete)
             .field(
                 "build_batch_positions_len",
@@ -742,7 +741,7 @@ impl std::fmt::Debug for SpatialJoinBatchIterator {
 }
 
 /// Iterator that processes unmatched build-side batches for outer joins
-pub(crate) struct UnmatchedBuildBatchIterator {
+pub struct UnmatchedBuildBatchIterator {
     /// The spatial index reference
     spatial_index: Arc<SpatialIndex>,
     /// Current batch index being processed
@@ -756,9 +755,7 @@ pub(crate) struct UnmatchedBuildBatchIterator {
 }
 
 impl UnmatchedBuildBatchIterator {
-    pub(crate) fn new(
-        spatial_index: Arc<SpatialIndex>, empty_right_batch: RecordBatch,
-    ) -> Result<Self> {
+    pub fn new(spatial_index: Arc<SpatialIndex>, empty_right_batch: RecordBatch) -> Result<Self> {
         let visited_left_side = spatial_index.visited_left_side();
         let Some(vec_visited_left_side) = visited_left_side else {
             return internal_err!("The bitmap for visited left side is not created");

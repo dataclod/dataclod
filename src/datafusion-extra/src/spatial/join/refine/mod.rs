@@ -26,7 +26,7 @@ use crate::spatial::statistics::GeoStatistics;
 /// returned. Different spatial libraries (Geo, GEOS, TG) provide their own
 /// implementations with varying performance characteristics and geometric
 /// predicate support.
-pub(crate) trait IndexQueryResultRefiner: Send + Sync {
+pub trait IndexQueryResultRefiner: Send + Sync {
     /// Refine index query results by evaluating the exact spatial predicate.
     ///
     /// Takes a probe geometry and a list of candidate build-side geometries
@@ -41,7 +41,7 @@ pub(crate) trait IndexQueryResultRefiner: Send + Sync {
     ///   information
     ///
     /// # Returns
-    /// * `Vec<(i32, i32)>` - Vector of (batch_index, row_index) pairs for
+    /// * `Vec<(i32, i32)>` - Vector of (`batch_index`, `row_index`) pairs for
     ///   geometries that satisfy the spatial predicate
     ///
     /// # Performance
@@ -104,7 +104,7 @@ pub(crate) trait IndexQueryResultRefiner: Send + Sync {
 /// # Returns
 /// * `Arc<dyn IndexQueryResultRefiner>` - Thread-safe refiner implementation
 ///   for the specified library
-pub(crate) fn create_refiner(
+pub fn create_refiner(
     predicate: &SpatialPredicate, options: SpatialJoinOptions, num_build_geoms: usize,
     build_stats: GeoStatistics,
 ) -> Arc<dyn IndexQueryResultRefiner> {

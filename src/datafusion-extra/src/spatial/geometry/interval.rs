@@ -5,7 +5,7 @@ use serde_with::{DisplayFromStr, serde_as};
 /// Generic 1D intervals with wraparound support
 ///
 /// This trait specifies common behaviour implemented by the [Interval] and
-/// [WraparoundInterval]. In general, one should use [Interval] unless
+/// [`WraparoundInterval`]. In general, one should use [Interval] unless
 /// specifically working with wraparound, as the contingency of wraparound
 /// incurs overhead (particularly in a loop). This trait is mostly used to
 /// simplify testing and unify documentation for the two concrete
@@ -73,28 +73,29 @@ pub trait IntervalTrait: std::fmt::Debug + PartialEq {
 
     /// Compute a new interval that is the union of both
     ///
-    /// When accumulating intervals in a loop, use [Interval::update_interval].
+    /// When accumulating intervals in a loop, use
+    /// [`Interval::update_interval`].
     fn merge_interval(&self, other: &Self) -> Self;
 }
 
 /// 1D Interval that never wraps around
 ///
 /// Represents a minimum and maximum value without wraparound logic (see
-/// [WraparoundInterval] for a wraparound implementation).
+/// [`WraparoundInterval`] for a wraparound implementation).
 #[serde_as]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Interval {
     /// Lower bound
     ///
     /// This is serialized and deserialized using its string representation to
-    /// preserve NaN and Infinity values when using serde_json.
+    /// preserve NaN and Infinity values when using `serde_json`.
     #[serde_as(as = "DisplayFromStr")]
     lo: f64,
 
     /// Upper bound
     ///
     /// This is serialized and deserialized using its string representation to
-    /// preserve NaN and Infinity values when using serde_json.
+    /// preserve NaN and Infinity values when using `serde_json`.
     #[serde_as(as = "DisplayFromStr")]
     hi: f64,
 }

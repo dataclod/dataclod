@@ -15,14 +15,13 @@ use geo_traits::to_geo::ToGeoGeometry;
 use geo_types::Rect;
 use wkb::reader::Wkb;
 
-use crate::spatial::join::option::SpatialJoinOptions;
 use crate::spatial::join::spatial_predicate::{
     DistancePredicate, RelationPredicate, SpatialPredicate,
 };
 
 /// Operand evaluator is for evaluating the operands of a spatial predicate. It
 /// can be a distance operand evaluator or a relation operand evaluator.
-pub(crate) trait OperandEvaluator: fmt::Debug + Send + Sync {
+pub trait OperandEvaluator: fmt::Debug + Send + Sync {
     /// Evaluate the spatial predicate operand on the build side.
     fn evaluate_build(&self, batch: &RecordBatch) -> Result<EvaluatedGeometryArray> {
         let geom_expr = self.build_side_expr()?;
@@ -51,36 +50,33 @@ pub(crate) trait OperandEvaluator: fmt::Debug + Send + Sync {
 }
 
 /// Create a spatial predicate evaluator for the spatial predicate.
-pub(crate) fn create_operand_evaluator(
-    predicate: &SpatialPredicate, options: SpatialJoinOptions,
-) -> Arc<dyn OperandEvaluator> {
+pub fn create_operand_evaluator(predicate: &SpatialPredicate) -> Arc<dyn OperandEvaluator> {
     match predicate {
         SpatialPredicate::Distance(predicate) => {
-            Arc::new(DistanceOperandEvaluator::new(predicate.clone(), options))
+            Arc::new(DistanceOperandEvaluator::new(predicate.clone()))
         }
         SpatialPredicate::Relation(predicate) => {
-            Arc::new(RelationOperandEvaluator::new(predicate.clone(), options))
+            Arc::new(RelationOperandEvaluator::new(predicate.clone()))
         }
     }
 }
 
 /// Result of evaluating a geometry batch.
-pub(crate) struct EvaluatedGeometryArray {
+pub struct EvaluatedGeometryArray {
     /// The array of geometries produced by evaluating the geometry expression.
     pub geometry_array: ArrayRef,
-    /// The rects of the geometries in the geometry array. Each geometry could
-    /// be covered by a collection of multiple rects. The first element of
-    /// the tuple is the index of the geometry in the geometry array.
-    /// This array is guaranteed to be sorted by the index of the geometry.
-    pub rects: Vec<(usize, Rect<f32>)>,
+    /// The rects of the geometries in the geometry array. The length of this
+    /// array is equal to the number of geometries. The rects will be None
+    /// for empty or null geometries.
+    pub rects: Vec<Option<Rect<f32>>>,
     /// The distance value produced by evaluating the distance expression.
     pub distance: Option<ColumnarValue>,
-    /// WKBs of the geometries in `wkb_array`. The wkb values reference buffers
-    /// inside the geometry array, but we'll only allow accessing Wkb<'a>
-    /// where 'a is the lifetime of the GeometryBatchResult to make
-    /// the interfaces safe. The buffers in `wkb_array` are allocated on the
-    /// heap and won't be moved when the GeometryBatchResult is moved, so we
-    /// don't need to worry about pinning.
+    /// WKBs of the geometries in `geometry_array`. The wkb values reference
+    /// buffers inside the geometry array, but we'll only allow accessing
+    /// Wkb<'a> where 'a is the lifetime of the `GeometryBatchResult` to make
+    /// the interfaces safe. The buffers in `geometry_array` are allocated on
+    /// the heap and won't be moved when the `GeometryBatchResult` is moved,
+    /// so we don't need to worry about pinning.
     wkbs: Vec<Option<Wkb<'static>>>,
 }
 
@@ -90,25 +86,28 @@ impl EvaluatedGeometryArray {
         let mut rect_vec = Vec::with_capacity(num_rows);
         let mut wkbs = Vec::with_capacity(num_rows);
         let wkb_array = geometry_array.as_binary::<i32>();
-        wkb_array.iter().enumerate().for_each(|(idx, wkb_opt)| {
+        wkb_array.iter().for_each(|wkb_opt| {
             let wkb_opt = wkb_opt.and_then(|wkb| Wkb::try_new(wkb).ok());
-            if let Some(wkb) = wkb_opt.as_ref() {
-                let geo = wkb.to_geometry();
-                if let Some(rect) = geo.bounding_rect() {
+            let rect_opt = wkb_opt.as_ref().and_then(|wkb| {
+                wkb.to_geometry().bounding_rect().map(|rect| {
                     let min = rect.min();
                     let max = rect.max();
                     // f64_box_to_f32 will ensure the resulting `f32` box is no smaller than the
                     // `f64` box.
                     let (min_x, min_y, max_x, max_y) = f64_box_to_f32(min.x, min.y, max.x, max.y);
-                    let rect =
-                        Rect::new(coord! { x: min_x, y: min_y }, coord! { x: max_x, y: max_y });
-                    rect_vec.push((idx, rect));
-                }
-            }
+                    Rect::new(coord! { x: min_x, y: min_y }, coord! { x: max_x, y: max_y })
+                })
+            });
             wkbs.push(wkb_opt);
+            rect_vec.push(rect_opt);
         });
 
-        // Safety: The wkbs must reference buffers inside the `wkb_array`.
+        // Safety: The wkbs must reference buffers inside the `geometry_array`. Since
+        // the `geometry_array` and `wkbs` are both owned by the
+        // `EvaluatedGeometryArray`, so they have the same lifetime. We'll never have a
+        // situation where the `EvaluatedGeometryArray` is dropped while the `wkbs` are
+        // still in use (guaranteed by the scope of the `wkbs` field and lifetime
+        // signature of the `wkbs` method).
         let wkbs = wkbs
             .into_iter()
             .map(|wkb| wkb.map(|wkb| unsafe { transmute(wkb) }))
@@ -143,8 +142,6 @@ impl EvaluatedGeometryArray {
         // much.
         let wkb_vec_size = self.wkbs.allocated_size();
 
-        // We do not take wkb_array into consideration, since it is a reference to some
-        // of the columns of the geometry_array.
         self.geometry_array.get_array_memory_size()
             + self.rects.allocated_size()
             + distance_in_mem_size
@@ -156,15 +153,11 @@ impl EvaluatedGeometryArray {
 #[derive(Debug)]
 struct RelationOperandEvaluator {
     inner: RelationPredicate,
-    _options: SpatialJoinOptions,
 }
 
 impl RelationOperandEvaluator {
-    pub fn new(inner: RelationPredicate, options: SpatialJoinOptions) -> Self {
-        Self {
-            inner,
-            _options: options,
-        }
+    pub fn new(inner: RelationPredicate) -> Self {
+        Self { inner }
     }
 }
 
@@ -172,15 +165,11 @@ impl RelationOperandEvaluator {
 #[derive(Debug)]
 struct DistanceOperandEvaluator {
     inner: DistancePredicate,
-    _options: SpatialJoinOptions,
 }
 
 impl DistanceOperandEvaluator {
-    pub fn new(inner: DistancePredicate, options: SpatialJoinOptions) -> Self {
-        Self {
-            inner,
-            _options: options,
-        }
+    pub fn new(inner: DistancePredicate) -> Self {
+        Self { inner }
     }
 }
 
@@ -216,7 +205,10 @@ impl DistanceOperandEvaluator {
         let distance_columnar_value = distance_columnar_value.cast_to(&DataType::Float64, None)?;
         match &distance_columnar_value {
             ColumnarValue::Scalar(ScalarValue::Float64(Some(distance))) => {
-                result.rects.iter_mut().for_each(|(_, rect)| {
+                result.rects.iter_mut().for_each(|rect_opt| {
+                    let Some(rect) = rect_opt else {
+                        return;
+                    };
                     expand_rect_in_place(rect, *distance);
                 });
             }
@@ -227,9 +219,12 @@ impl DistanceOperandEvaluator {
             }
             ColumnarValue::Array(array) => {
                 if let Some(array) = array.as_any().downcast_ref::<Float64Array>() {
-                    for (geom_idx, rect) in &mut result.rects {
-                        if array.is_valid(*geom_idx) {
-                            let dist = array.value(*geom_idx);
+                    for (geom_idx, rect_opt) in result.rects.iter_mut().enumerate() {
+                        if array.is_valid(geom_idx) {
+                            let dist = array.value(geom_idx);
+                            let Some(rect) = rect_opt else {
+                                continue;
+                            };
                             expand_rect_in_place(rect, dist);
                         }
                     }
@@ -251,9 +246,7 @@ impl DistanceOperandEvaluator {
     }
 }
 
-pub(crate) fn distance_value_at(
-    distance_columnar_value: &ColumnarValue, i: usize,
-) -> Result<Option<f64>> {
+pub fn distance_value_at(distance_columnar_value: &ColumnarValue, i: usize) -> Result<Option<f64>> {
     match distance_columnar_value {
         ColumnarValue::Scalar(ScalarValue::Float64(dist_opt)) => Ok(*dist_opt),
         ColumnarValue::Array(array) => {
@@ -308,11 +301,11 @@ impl OperandEvaluator for DistanceOperandEvaluator {
     }
 
     fn build_side_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::clone(&self.inner.left))
+        Ok(self.inner.left.clone())
     }
 
     fn probe_side_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::clone(&self.inner.right))
+        Ok(self.inner.right.clone())
     }
 
     fn resolve_distance(
@@ -333,10 +326,10 @@ impl OperandEvaluator for DistanceOperandEvaluator {
 
 impl OperandEvaluator for RelationOperandEvaluator {
     fn build_side_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::clone(&self.inner.left))
+        Ok(self.inner.left.clone())
     }
 
     fn probe_side_expr(&self) -> Result<Arc<dyn PhysicalExpr>> {
-        Ok(Arc::clone(&self.inner.right))
+        Ok(self.inner.right.clone())
     }
 }

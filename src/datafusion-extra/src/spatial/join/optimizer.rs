@@ -24,16 +24,16 @@ use crate::spatial::join::spatial_predicate::{
 /// Physical planner extension for spatial joins
 ///
 /// This extension recognizes nested loop join operations with spatial
-/// predicates and converts them to SpatialJoinExec, which is specially
+/// predicates and converts them to `SpatialJoinExec`, which is specially
 /// optimized for spatial joins.
 #[derive(Debug)]
 pub struct SpatialJoinOptimizer;
 
 impl PhysicalOptimizerRule for SpatialJoinOptimizer {
     fn optimize(
-        &self, plan: Arc<dyn ExecutionPlan>, config: &ConfigOptions,
+        &self, plan: Arc<dyn ExecutionPlan>, _config: &ConfigOptions,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        let transformed = plan.transform_up(|plan| self.try_optimize_join(plan, config))?;
+        let transformed = plan.transform_up(|plan| self.try_optimize_join(plan))?;
         Ok(transformed.data)
     }
 
@@ -86,10 +86,10 @@ impl OptimizerRule for SpatialJoinOptimizer {
     /// ```
     ///
     /// This is for enabling this logical join operator to be converted to a
-    /// NestedLoopJoin physical node with a spatial predicate, so that it
-    /// could subsequently be optimized to a SpatialJoin physical node.
+    /// `NestedLoopJoin` physical node with a spatial predicate, so that it
+    /// could subsequently be optimized to a `SpatialJoin` physical node.
     /// Please refer to the `PhysicalOptimizerRule` implementation of this
-    /// struct and [SpatialJoinOptimizer::try_optimize_join] for details.
+    /// struct and [`SpatialJoinOptimizer::try_optimize_join`] for details.
     fn rewrite(
         &self, plan: LogicalPlan, _config: &dyn OptimizerConfig,
     ) -> Result<Transformed<LogicalPlan>> {
@@ -128,8 +128,8 @@ impl OptimizerRule for SpatialJoinOptimizer {
         }
 
         let rewritten_plan = Join::try_new(
-            Arc::clone(left),
-            Arc::clone(right),
+            left.clone(),
+            right.clone(),
             on.clone(),
             Some(predicate.clone()),
             JoinType::Inner,
@@ -186,10 +186,10 @@ fn is_spatial_predicate(expr: &Expr) -> bool {
 }
 
 impl SpatialJoinOptimizer {
-    /// Rewrite `plan` containing NestedLoopJoinExec with spatial predicates to
-    /// SpatialJoinExec.
+    /// Rewrite `plan` containing `NestedLoopJoinExec` with spatial predicates
+    /// to `SpatialJoinExec`.
     fn try_optimize_join(
-        &self, plan: Arc<dyn ExecutionPlan>, _config: &ConfigOptions,
+        &self, plan: Arc<dyn ExecutionPlan>,
     ) -> Result<Transformed<Arc<dyn ExecutionPlan>>> {
         // Check if this is a NestedLoopJoinExec that we can convert to spatial join
         if let Some(nested_loop_join) = plan.as_any().downcast_ref::<NestedLoopJoinExec>()
@@ -202,10 +202,10 @@ impl SpatialJoinOptimizer {
         Ok(Transformed::no(plan))
     }
 
-    /// Try to convert a NestedLoopJoinExec with spatial predicates as join
-    /// condition to a SpatialJoinExec. SpatialJoinExec executes the query
+    /// Try to convert a `NestedLoopJoinExec` with spatial predicates as join
+    /// condition to a `SpatialJoinExec`. `SpatialJoinExec` executes the query
     /// using an optimized algorithm, which is more efficient than
-    /// NestedLoopJoinExec.
+    /// `NestedLoopJoinExec`.
     fn try_convert_to_spatial_join(
         &self, nested_loop_join: &NestedLoopJoinExec,
     ) -> Result<Option<Arc<dyn ExecutionPlan>>> {
@@ -336,7 +336,7 @@ fn extract_spatial_predicate(
 }
 
 /// Match the scalar function expression to a spatial relation predicate such as
-/// ST_Intersects(lhs.geom, rhs.geom). The input arguments of the ST_ function
+/// `ST_Intersects(lhs.geom`, rhs.geom). The input arguments of the ST_ function
 /// should reference columns from different sides.
 fn match_relation_predicate(
     scalar_fn: &ScalarFunctionExpr, column_indices: &[ColumnIndex],
@@ -383,10 +383,10 @@ fn match_relation_predicate(
 }
 
 /// Match the scalar function expression to a distance predicate such as
-/// ST_DWithin(geom1, geom2, distance) or ST_Distance(geom1, geom2) <= distance.
-/// The geometry input arguments of the ST_ function should reference columns
-/// from different sides. The distance input argument should not reference
-/// columns from both sides simultaneously.
+/// `ST_DWithin(geom1`, geom2, distance) or `ST_Distance(geom1`, geom2) <=
+/// distance. The geometry input arguments of the ST_ function should reference
+/// columns from different sides. The distance input argument should not
+/// reference columns from both sides simultaneously.
 fn match_distance_predicate(
     expr: &Arc<dyn PhysicalExpr>, column_indices: &[ColumnIndex],
 ) -> Option<DistancePredicate> {

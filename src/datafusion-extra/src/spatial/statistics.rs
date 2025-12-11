@@ -12,8 +12,8 @@ use crate::spatial::geometry::types::GeometryTypeAndDimensions;
 /// These statistics are an abstraction to provide sedonadb the ability to
 /// perform generic pruning and optimization for datasources that have the
 /// ability to provide this information. This may evolve to support more
-/// fields; however, can currently express Parquet built-in GeoStatistics,
-/// GeoParquet metadata, and GDAL OGR (via GetExtent() and GetGeomType()).
+/// fields; however, can currently express Parquet built-in `GeoStatistics`,
+/// `GeoParquet` metadata, and GDAL OGR (via `GetExtent()` and `GetGeomType()`).
 /// This struct can also represent partial or missing information.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeoStatistics {
@@ -277,8 +277,8 @@ impl GeoStatistics {
         }
     }
 
-    /// Convert this GeoStatistics to a ScalarValue for storage in DataFusion
-    /// statistics
+    /// Convert this `GeoStatistics` to a `ScalarValue` for storage in
+    /// `DataFusion` statistics
     pub fn to_scalar_value(&self) -> Result<ScalarValue> {
         // Serialize to JSON
         let serialized = serde_json::to_vec(self).map_err(|e| {

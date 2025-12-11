@@ -9,28 +9,28 @@ use serde_with::{DeserializeFromStr, SerializeDisplay};
 /// Geometry types
 ///
 /// An enumerator for the set of natively supported geometry types without
-/// considering [Dimensions]. See [GeometryTypeAndDimensions] for a struct to
+/// considering [Dimensions]. See [`GeometryTypeAndDimensions`] for a struct to
 /// track both.
 ///
-/// This is named GeometryTypeId such that it does not conflict with
-/// [geo_traits::GeometryType].
+/// This is named `GeometryTypeId` such that it does not conflict with
+/// [`geo_traits::GeometryType`].
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Hash, Clone, Copy)]
 pub enum GeometryTypeId {
     /// Unknown or mixed geometry type
     Geometry,
     /// Point geometry type
     Point,
-    /// LineString geometry type
+    /// `LineString` geometry type
     LineString,
     /// Polygon geometry type
     Polygon,
-    /// MultiPoint geometry type
+    /// `MultiPoint` geometry type
     MultiPoint,
-    /// MultiLineString geometry type
+    /// `MultiLineString` geometry type
     MultiLineString,
-    /// MultiPolygon geometry type
+    /// `MultiPolygon` geometry type
     MultiPolygon,
-    /// GeometryCollection geometry type
+    /// `GeometryCollection` geometry type
     GeometryCollection,
 }
 
@@ -38,7 +38,7 @@ impl GeometryTypeId {
     /// Construct a geometry type from a WKB type integer
     ///
     /// Parses the geometry type (not dimension) component of a WKB type code
-    /// (e.g., 1 for Point...7 for GeometryCollection).
+    /// (e.g., 1 for Point...7 for `GeometryCollection`).
     pub fn try_from_wkb_id(wkb_id: u32) -> Result<Self> {
         match wkb_id {
             0 => Ok(Self::Geometry),
@@ -55,9 +55,9 @@ impl GeometryTypeId {
 
     /// GeoJSON/GeoParquet string identifier
     ///
-    /// The identifier used by GeoJSON and GeoParquet to refer to this geometry
-    /// type. Use [FromStr] to parse such a string back into a
-    /// GeometryTypeId.
+    /// The identifier used by `GeoJSON` and `GeoParquet` to refer to this
+    /// geometry type. Use [`FromStr`] to parse such a string back into a
+    /// `GeometryTypeId`.
     pub fn geojson_id(&self) -> &'static str {
         match self {
             Self::Geometry => "Geometry",
@@ -93,9 +93,9 @@ impl FromStr for GeometryTypeId {
 
 /// Geometry type and dimension
 ///
-/// Combines a [GeometryTypeId] with [Dimensions] to handle cases where these
-/// concepts are represented together (e.g., GeoParquet geometry types, WKB
-/// geometry type integers, Parquet GeoStatistics). For sanity's sake, this
+/// Combines a [`GeometryTypeId`] with [Dimensions] to handle cases where these
+/// concepts are represented together (e.g., `GeoParquet` geometry types, WKB
+/// geometry type integers, Parquet `GeoStatistics`). For sanity's sake, this
 /// combined concept is also frequently just called "geometry type".
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, SerializeDisplay, DeserializeFromStr)]
 pub struct GeometryTypeAndDimensions {
@@ -104,7 +104,7 @@ pub struct GeometryTypeAndDimensions {
 }
 
 impl GeometryTypeAndDimensions {
-    /// Create from [GeometryTypeId] and [Dimensions]
+    /// Create from [`GeometryTypeId`] and [Dimensions]
     pub fn new(geometry_type: GeometryTypeId, dimensions: Dimensions) -> Self {
         Self {
             geometry_type,

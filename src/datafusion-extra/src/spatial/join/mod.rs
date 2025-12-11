@@ -1,8 +1,7 @@
-mod concurrent_reservation;
+mod build_index;
+mod evaluated_batch;
 mod exec;
 mod index;
-mod init_once_array;
-mod once_fut;
 mod operand_evaluator;
 pub mod optimizer;
 mod option;
