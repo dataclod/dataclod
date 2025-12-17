@@ -1,5 +1,7 @@
 mod exec_mode_selector;
+pub mod geo;
 pub mod geos;
+pub mod tg;
 
 use std::sync::Arc;
 
@@ -7,8 +9,8 @@ use datafusion::common::Result;
 use wkb::reader::Wkb;
 
 use crate::join::index::IndexQueryResult;
-use crate::join::option::{ExecutionMode, SpatialJoinOptions};
 use crate::join::spatial_predicate::SpatialPredicate;
+use crate::option::{ExecutionMode, SpatialJoinOptions, SpatialLibrary};
 use crate::statistics::GeoStatistics;
 
 /// Trait for refining spatial index query results by evaluating exact geometric
@@ -104,14 +106,34 @@ pub trait IndexQueryResultRefiner: Send + Sync {
 /// # Returns
 /// * `Arc<dyn IndexQueryResultRefiner>` - Thread-safe refiner implementation
 ///   for the specified library
-pub fn create_refiner(
-    predicate: &SpatialPredicate, options: SpatialJoinOptions, num_build_geoms: usize,
-    build_stats: GeoStatistics,
+pub(crate) fn create_refiner(
+    library: SpatialLibrary, predicate: &SpatialPredicate, options: SpatialJoinOptions,
+    num_build_geoms: usize, build_stats: GeoStatistics,
 ) -> Arc<dyn IndexQueryResultRefiner> {
-    Arc::new(geos::GeosRefiner::new(
-        predicate,
-        options,
-        num_build_geoms,
-        build_stats,
-    ))
+    match library {
+        SpatialLibrary::Geo => Arc::new(geo::GeoRefiner::new(predicate, options, build_stats)),
+        SpatialLibrary::Geos => {
+            Arc::new(geos::GeosRefiner::new(
+                predicate,
+                options,
+                num_build_geoms,
+                build_stats,
+            ))
+        }
+        SpatialLibrary::Tg => {
+            match tg::TgRefiner::try_new(
+                predicate,
+                options.clone(),
+                num_build_geoms,
+                build_stats.clone(),
+            ) {
+                Ok(refiner) => Arc::new(refiner),
+                Err(_) => {
+                    // TG does not support all spatial predicates. Fallback to Geo if TG fails to
+                    // initialize
+                    Arc::new(geo::GeoRefiner::new(predicate, options, build_stats))
+                }
+            }
+        }
+    }
 }

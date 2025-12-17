@@ -8,13 +8,13 @@ use wkb::reader::Wkb;
 
 use crate::geos_ext::GEOSWkbFactory;
 use crate::join::index::IndexQueryResult;
-use crate::join::option::{ExecutionMode, SpatialJoinOptions};
 use crate::join::refine::IndexQueryResultRefiner;
 use crate::join::refine::exec_mode_selector::{
     ExecModeSelector, SelectOptimalMode, get_or_update_execution_mode,
 };
 use crate::join::spatial_predicate::{RelationPredicate, SpatialPredicate, SpatialRelationType};
 use crate::join::utils::init_once_array::InitOnceArray;
+use crate::option::{ExecutionMode, SpatialJoinOptions};
 use crate::statistics::GeoStatistics;
 
 /// GEOS-specific optimal mode selector that chooses the best execution mode
@@ -203,7 +203,7 @@ impl GeosRefiner {
             ExecutionMode::Speculative(n) => {
                 let selector = GeosOptimalModeSelector {
                     predicate: predicate.clone(),
-                    min_points_for_build_preparation: options.min_points_for_build_preparation
+                    min_points_for_build_preparation: options.geos.min_points_for_build_preparation
                         as f64,
                 };
                 if let Some(mode) = selector.select_without_probe_stats(&build_stats) {

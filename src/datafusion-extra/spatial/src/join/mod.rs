@@ -4,7 +4,6 @@ mod exec;
 mod index;
 mod operand_evaluator;
 pub mod optimizer;
-mod option;
 mod refine;
 mod spatial_predicate;
 mod stream;

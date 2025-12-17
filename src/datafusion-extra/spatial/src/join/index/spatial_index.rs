@@ -14,10 +14,10 @@ use wkb::reader::Wkb;
 use crate::join::evaluated_batch::EvaluatedBatch;
 use crate::join::index::{IndexQueryResult, QueryResultMetrics};
 use crate::join::operand_evaluator::{OperandEvaluator, create_operand_evaluator};
-use crate::join::option::{ExecutionMode, SpatialJoinOptions};
 use crate::join::refine::{IndexQueryResultRefiner, create_refiner};
 use crate::join::spatial_predicate::SpatialPredicate;
 use crate::join::utils::concurrent_reservation::ConcurrentReservation;
+use crate::option::{ExecutionMode, SpatialJoinOptions};
 use crate::statistics::GeoStatistics;
 
 pub struct SpatialIndex {
@@ -72,7 +72,13 @@ impl SpatialIndex {
         probe_threads_counter: AtomicUsize, mut reservation: MemoryReservation,
     ) -> Self {
         let evaluator = create_operand_evaluator(&spatial_predicate);
-        let refiner = create_refiner(&spatial_predicate, options, 0, GeoStatistics::empty());
+        let refiner = create_refiner(
+            options.spatial_library,
+            &spatial_predicate,
+            options,
+            0,
+            GeoStatistics::empty(),
+        );
         let refiner_reservation = reservation.split(0);
         let refiner_reservation = ConcurrentReservation::new(0, refiner_reservation);
         let rtree = RTreeBuilder::<f32>::new(0).finish::<HilbertSort>();

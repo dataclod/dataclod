@@ -16,11 +16,11 @@ use crate::join::evaluated_batch::EvaluatedBatch;
 use crate::join::index::build_side_collector::BuildPartition;
 use crate::join::index::spatial_index::SpatialIndex;
 use crate::join::operand_evaluator::create_operand_evaluator;
-use crate::join::option::SpatialJoinOptions;
 use crate::join::refine::create_refiner;
 use crate::join::spatial_predicate::SpatialPredicate;
 use crate::join::utils::concurrent_reservation::ConcurrentReservation;
 use crate::join::utils::join_utils::need_produce_result_in_final;
+use crate::option::SpatialJoinOptions;
 use crate::statistics::GeoStatistics;
 
 // Type aliases for better readability
@@ -232,6 +232,7 @@ impl SpatialIndexBuilder {
         let visited_left_side = self.build_visited_bitmaps()?;
 
         let refiner = create_refiner(
+            self.options.spatial_library,
             &self.spatial_predicate,
             self.options.clone(),
             num_geoms,

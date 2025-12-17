@@ -27,6 +27,8 @@ geos = { git = "https://github.com/georust/geos.git", rev = "47afbad2483e489911d
 libc = "0.2"
 parking_lot.workspace = true
 proj4rs = "0.1.9"
+regex = "1"
+sedona-tg = "0.2.0"
 serde = "1.0"
 serde_json = "1.0"
 serde_with = "3.16"

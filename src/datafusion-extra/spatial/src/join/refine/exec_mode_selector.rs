@@ -2,7 +2,7 @@ use std::sync::{Arc, OnceLock};
 
 use parking_lot::Mutex;
 
-use crate::join::option::ExecutionMode;
+use crate::option::ExecutionMode;
 use crate::statistics::GeoStatistics;
 
 /// Trait for selecting the optimal execution mode based on build and probe

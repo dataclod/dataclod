@@ -83,7 +83,12 @@ impl QueryContext {
 
     pub async fn execute_logical_plan(&self, plan: LogicalPlan) -> Result<DataFrame> {
         match plan {
-            LogicalPlan::Statement(Statement::SetVariable(_)) => self.return_empty_dataframe(),
+            LogicalPlan::Statement(Statement::SetVariable(stmt))
+                if !stmt.variable.starts_with("datafusion.")
+                    && !stmt.variable.starts_with("dataclod.") =>
+            {
+                self.return_empty_dataframe()
+            }
 
             plan => {
                 let df = self.inner.execute_logical_plan(plan).await?;
