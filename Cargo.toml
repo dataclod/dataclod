@@ -14,7 +14,9 @@ members = [
   "src/common/telemetry",
   "src/common/utils",
   "src/core",
-  "src/datafusion-extra",
+  "src/datafusion-extra/catalog",
+  "src/datafusion-extra/spatial",
+  "src/datafusion-extra/sqlbuiltin",
   "src/server",
 ]
 resolver = "3"
@@ -65,7 +67,9 @@ common-exception = { path = "src/common/exception", version = "0.0.2" }
 common-telemetry = { path = "src/common/telemetry", version = "0.0.2" }
 common-utils = { path = "src/common/utils", version = "0.0.2" }
 dataclod = { path = "src/core", version = "0.0.2" }
-datafusion-extra = { path = "src/datafusion-extra", version = "0.0.2" }
+datafusion-catalog-extra = { path = "src/datafusion-extra/catalog", version = "0.0.2" }
+datafusion-spatial = { path = "src/datafusion-extra/spatial", version = "0.0.2" }
+datafusion-sqlbuiltin = { path = "src/datafusion-extra/sqlbuiltin", version = "0.0.2" }
 server = { package = "dataclod-server", path = "src/server", version = "0.0.2" }
 
 # crates.io dependencies

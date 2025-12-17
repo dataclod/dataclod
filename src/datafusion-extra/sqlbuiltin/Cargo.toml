@@ -1,0 +1,16 @@
+[package]
+name = "datafusion-sqlbuiltin"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+common-utils.workspace = true
+datafusion.workspace = true

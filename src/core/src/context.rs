@@ -7,7 +7,6 @@ use datafusion::execution::SessionStateBuilder;
 use datafusion::execution::context::{SessionConfig, SessionContext};
 use datafusion::logical_expr::{LogicalPlan, LogicalPlanBuilder, Statement};
 use datafusion::sql::parser::Statement as SqlStatement;
-use datafusion_extra::spatial::register_spatial_join_optimizer;
 use parking_lot::RwLock;
 
 use crate::rewrite::StatementRewrite;
@@ -33,12 +32,12 @@ impl QueryContext {
         let state_builder = SessionStateBuilder::new()
             .with_config(config)
             .with_default_features();
-        let state_builder = register_spatial_join_optimizer(state_builder);
+        let state_builder = datafusion_spatial::register_spatial_join_optimizer(state_builder);
         let state = state_builder.build();
         let ctx = SessionContext::new_with_state(state);
-        datafusion_extra::catalog::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");
-        datafusion_extra::sqlbuiltin::register_udf(&ctx);
-        datafusion_extra::spatial::register_spatial_udfs(&ctx);
+        datafusion_catalog_extra::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");
+        datafusion_sqlbuiltin::register_udf(&ctx);
+        datafusion_spatial::register_spatial_udfs(&ctx);
         crate::expr::register_udtf(&ctx);
         let state = Arc::new(RwLock::new(QueryState::new()));
         let mut ctx = Self { inner: ctx, state };

@@ -1111,7 +1111,9 @@ version = "0.0.2"
 dependencies = [
  "anyhow",
  "datafusion",
- "datafusion-extra",
+ "datafusion-catalog-extra",
+ "datafusion-spatial",
+ "datafusion-sqlbuiltin",
  "datafusion-table-providers",
  "parking_lot",
  "spiceai_duckdb_fork",
@@ -1230,6 +1232,16 @@ dependencies = [
  "object_store",
  "parking_lot",
  "tokio",
+]
+
+[[package]]
+name = "datafusion-catalog-extra"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common-utils",
+ "datafusion",
 ]
 
 [[package]]
@@ -1485,31 +1497,6 @@ dependencies = [
  "indexmap 2.12.1",
  "itertools 0.14.0",
  "paste",
-]
-
-[[package]]
-name = "datafusion-extra"
-version = "0.0.2"
-dependencies = [
- "anyhow",
- "async-trait",
- "byteorder",
- "common-utils",
- "datafusion",
- "float_next_after",
- "futures",
- "geo",
- "geo-index",
- "geo-traits",
- "geo-types",
- "geos",
- "libc",
- "parking_lot",
- "proj4rs",
- "serde",
- "serde_json",
- "serde_with",
- "wkb",
 ]
 
 [[package]]
@@ -1820,6 +1807,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "datafusion-spatial"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "byteorder",
+ "datafusion",
+ "float_next_after",
+ "futures",
+ "geo",
+ "geo-index",
+ "geo-traits",
+ "geo-types",
+ "geos",
+ "libc",
+ "parking_lot",
+ "proj4rs",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "wkb",
+]
+
+[[package]]
 name = "datafusion-sql"
 version = "51.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1835,6 +1845,14 @@ dependencies = [
  "recursive",
  "regex",
  "sqlparser",
+]
+
+[[package]]
+name = "datafusion-sqlbuiltin"
+version = "0.0.2"
+dependencies = [
+ "common-utils",
+ "datafusion",
 ]
 
 [[package]]

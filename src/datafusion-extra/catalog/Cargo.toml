@@ -1,5 +1,5 @@
 [package]
-name = "dataclod"
+name = "datafusion-catalog-extra"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -13,11 +13,6 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+common-utils.workspace = true
 datafusion.workspace = true
-datafusion-catalog-extra.workspace = true
-datafusion-spatial.workspace = true
-datafusion-sqlbuiltin.workspace = true
-datafusion-table-providers.workspace = true
-duckdb.workspace = true
-parking_lot.workspace = true
-tokio.workspace = true
