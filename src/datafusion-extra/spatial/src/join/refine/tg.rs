@@ -1,9 +1,8 @@
-use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use datafusion::common::{DataFusionError, Result, internal_err};
-use sedona_tg::tg;
+use tg_geom::{Geom, IndexKind};
 use wkb::reader::Wkb;
 
 use crate::join::index::IndexQueryResult;
@@ -113,8 +112,8 @@ impl SelectOptimalMode for TgOptimalModeSelector {
 /// predicates.
 pub(crate) struct TgRefiner {
     evaluator: Box<dyn TgPredicateEvaluator>,
-    prepared_geoms: InitOnceArray<Option<tg::Geom>>,
-    index_type: tg::IndexType,
+    prepared_geoms: InitOnceArray<Option<Geom>>,
+    index_type: IndexKind,
     mem_usage: AtomicUsize,
     exec_mode: OnceLock<ExecutionMode>,
     exec_mode_selector: Option<ExecModeSelector>,
@@ -127,8 +126,8 @@ impl TgRefiner {
     ) -> Result<Self> {
         let evaluator: Box<dyn TgPredicateEvaluator> = create_evaluator(predicate)?;
         let index_type = match options.tg.index_type {
-            TgIndexType::Natural => tg::IndexType::Natural,
-            TgIndexType::YStripes => tg::IndexType::YStripes,
+            TgIndexType::Natural => IndexKind::Natural,
+            TgIndexType::YStripes => IndexKind::YStripes,
         };
 
         let exec_mode = OnceLock::new();
@@ -173,13 +172,13 @@ impl TgRefiner {
         &self, probe: &wkb::reader::Wkb<'_>, index_query_results: &[IndexQueryResult],
     ) -> Result<Vec<(i32, i32)>> {
         let mut build_batch_positions = Vec::with_capacity(index_query_results.len());
-        let probe_geom = tg::Geom::parse_wkb(probe.buf(), self.index_type)
+        let probe_geom = Geom::from_wkb_ix(probe.buf(), self.index_type)
             .map_err(|e| DataFusionError::External(Box::new(e)))?;
         for index_result in index_query_results {
             let (build_geom, is_newly_created) =
                 self.prepared_geoms
                     .get_or_create(index_result.geom_idx, || {
-                        let geom = tg::Geom::parse_wkb(index_result.wkb.buf(), self.index_type)
+                        let geom = Geom::from_wkb_ix(index_result.wkb.buf(), self.index_type)
                             .map_err(|e| DataFusionError::External(Box::new(e)))?;
                         Ok(Some(geom))
                     })?;
@@ -202,13 +201,13 @@ impl TgRefiner {
 
     fn refine_not_prepare_build(
         &self, probe: &wkb::reader::Wkb<'_>, index_query_results: &[IndexQueryResult],
-        probe_index_type: tg::IndexType,
+        probe_index_type: IndexKind,
     ) -> Result<Vec<(i32, i32)>> {
         let mut build_batch_positions = Vec::with_capacity(index_query_results.len());
-        let probe_geom = tg::Geom::parse_wkb(probe.buf(), probe_index_type)
+        let probe_geom = Geom::from_wkb_ix(probe.buf(), probe_index_type)
             .map_err(|e| DataFusionError::External(Box::new(e)))?;
         for index_result in index_query_results {
-            let build_geom = tg::Geom::parse_wkb(index_result.wkb.buf(), tg::IndexType::Unindexed)
+            let build_geom = Geom::from_wkb_ix(index_result.wkb.buf(), IndexKind::None)
                 .map_err(|e| DataFusionError::External(Box::new(e)))?;
             if self
                 .evaluator
@@ -228,7 +227,7 @@ impl IndexQueryResultRefiner for TgRefiner {
         let exec_mode = self.actual_execution_mode();
         match exec_mode {
             ExecutionMode::PrepareNone => {
-                self.refine_not_prepare_build(probe, index_query_results, tg::IndexType::Unindexed)
+                self.refine_not_prepare_build(probe, index_query_results, IndexKind::None)
             }
             ExecutionMode::PrepareBuild => self.refine_prepare_build(probe, index_query_results),
             ExecutionMode::PrepareProbe => {
@@ -266,64 +265,52 @@ impl IndexQueryResultRefiner for TgRefiner {
 }
 
 trait TgPredicateEvaluator: Send + Sync {
-    fn evaluate(&self, build: &tg::Geom, probe: &tg::Geom, distance: Option<f64>) -> Result<bool>;
-}
-
-struct TgPredicateEvaluatorImpl<Op: tg::BinaryPredicate + Send + Sync> {
-    _marker: PhantomData<Op>,
-}
-
-impl<Op: tg::BinaryPredicate + Send + Sync> TgPredicateEvaluatorImpl<Op> {
-    pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<Op: tg::BinaryPredicate + Send + Sync> TgPredicateEvaluator for TgPredicateEvaluatorImpl<Op> {
-    fn evaluate(&self, build: &tg::Geom, probe: &tg::Geom, _distance: Option<f64>) -> Result<bool> {
-        Ok(Op::evaluate(build, probe))
-    }
+    fn evaluate(&self, build: &Geom, probe: &Geom, distance: Option<f64>) -> Result<bool>;
 }
 
 fn create_evaluator(predicate: &SpatialPredicate) -> Result<Box<dyn TgPredicateEvaluator>> {
-    let evaluator: Box<dyn TgPredicateEvaluator> = match predicate {
+    match predicate {
         SpatialPredicate::Distance(_) => {
-            return Err(DataFusionError::Internal(
+            Err(DataFusionError::Internal(
                 "Distance predicate is not supported for TG".to_owned(),
-            ));
+            ))
         }
         SpatialPredicate::Relation(predicate) => {
             match predicate.relation_type {
-                SpatialRelationType::Intersects => {
-                    Box::new(TgPredicateEvaluatorImpl::<tg::Intersects>::new())
-                }
-                SpatialRelationType::Contains => {
-                    Box::new(TgPredicateEvaluatorImpl::<tg::Contains>::new())
-                }
-                SpatialRelationType::Within => {
-                    Box::new(TgPredicateEvaluatorImpl::<tg::Within>::new())
-                }
-                SpatialRelationType::Covers => {
-                    Box::new(TgPredicateEvaluatorImpl::<tg::Covers>::new())
-                }
-                SpatialRelationType::CoveredBy => {
-                    Box::new(TgPredicateEvaluatorImpl::<tg::CoveredBy>::new())
-                }
-                SpatialRelationType::Touches => {
-                    Box::new(TgPredicateEvaluatorImpl::<tg::Touches>::new())
-                }
-                SpatialRelationType::Equals => {
-                    Box::new(TgPredicateEvaluatorImpl::<tg::Equals>::new())
-                }
+                SpatialRelationType::Intersects => Ok(Box::new(TgIntersects)),
+                SpatialRelationType::Contains => Ok(Box::new(TgContains)),
+                SpatialRelationType::Within => Ok(Box::new(TgWithin)),
+                SpatialRelationType::Covers => Ok(Box::new(TgCovers)),
+                SpatialRelationType::CoveredBy => Ok(Box::new(TgCoveredBy)),
+                SpatialRelationType::Touches => Ok(Box::new(TgTouches)),
+                SpatialRelationType::Equals => Ok(Box::new(TgEquals)),
                 _ => {
-                    return Err(DataFusionError::Internal(
+                    Err(DataFusionError::Internal(
                         "Unsupported spatial relation type for TG".to_owned(),
-                    ));
+                    ))
                 }
             }
         }
-    };
-    Ok(evaluator)
+    }
 }
+
+macro_rules! impl_tg_evaluator {
+    ($struct_name:ident, $tg_method:ident $(,)?) => {
+        #[derive(Debug)]
+        struct $struct_name;
+
+        impl TgPredicateEvaluator for $struct_name {
+            fn evaluate(&self, build: &Geom, probe: &Geom, _distance: Option<f64>) -> Result<bool> {
+                Ok(build.$tg_method(probe))
+            }
+        }
+    };
+}
+
+impl_tg_evaluator!(TgIntersects, intersects);
+impl_tg_evaluator!(TgContains, contains);
+impl_tg_evaluator!(TgWithin, within);
+impl_tg_evaluator!(TgCovers, covers);
+impl_tg_evaluator!(TgCoveredBy, coveredby);
+impl_tg_evaluator!(TgTouches, touches);
+impl_tg_evaluator!(TgEquals, equals);
