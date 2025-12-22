@@ -38,7 +38,7 @@ impl ScalarUDFImpl for GeomFromEWKTUdf {
     }
 
     fn return_type(&self, _arg_types: &[DataType]) -> DFResult<DataType> {
-        Ok(DataType::Binary)
+        Ok(DataType::BinaryView)
     }
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {
@@ -77,7 +77,7 @@ impl ScalarUDFImpl for GeomFromEWKTUdf {
                         .ok()
                 });
 
-                Ok(ColumnarValue::Scalar(ScalarValue::Binary(result)))
+                Ok(ColumnarValue::Scalar(ScalarValue::BinaryView(result)))
             }
             other => {
                 exec_err!("unsupported data type '{other:?}' for udf {}", self.name())

@@ -5043,6 +5043,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de985c6d781baf800a9e630ff55b16d78f74b2ee0ce5e778c6abe0da71cc2f8b"
 dependencies = [
  "libc",
+ "libmimalloc-sys",
  "tg-geom-sys",
  "thiserror 2.0.17",
 ]

@@ -83,7 +83,7 @@ impl EvaluatedGeometryArray {
         let num_rows = geometry_array.len();
         let mut rect_vec = Vec::with_capacity(num_rows);
         let mut wkbs = Vec::with_capacity(num_rows);
-        let wkb_array = geometry_array.as_binary::<i32>();
+        let wkb_array = geometry_array.as_binary_view();
         wkb_array.iter().for_each(|wkb_opt| {
             let wkb_opt = wkb_opt.and_then(|wkb| Wkb::try_new(wkb).ok());
             let rect_opt = wkb_opt.as_ref().and_then(|wkb| {

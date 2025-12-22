@@ -38,7 +38,7 @@ impl ScalarUDFImpl for GeomFromTextUdf {
     }
 
     fn return_type(&self, _arg_types: &[DataType]) -> DFResult<DataType> {
-        Ok(DataType::Binary)
+        Ok(DataType::BinaryView)
     }
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {
@@ -85,7 +85,7 @@ impl ScalarUDFImpl for GeomFromTextUdf {
                             .ok()
                     });
 
-                    Ok(ColumnarValue::Scalar(ScalarValue::Binary(result)))
+                    Ok(ColumnarValue::Scalar(ScalarValue::BinaryView(result)))
                 }
                 other => {
                     exec_err!("unsupported data type '{other:?}' for udf {}", self.name())
@@ -190,7 +190,7 @@ impl ScalarUDFImpl for GeomFromTextUdf {
                                 .collect();
                             Arc::new(result)
                         }
-                        None => new_null_array(&DataType::Binary, srid_arr.len()),
+                        None => new_null_array(&DataType::BinaryView, srid_arr.len()),
                     };
                     Ok(ColumnarValue::Array(result))
                 }
@@ -215,7 +215,7 @@ impl ScalarUDFImpl for GeomFromTextUdf {
                         _ => None,
                     };
 
-                    Ok(ColumnarValue::Scalar(ScalarValue::Binary(result)))
+                    Ok(ColumnarValue::Scalar(ScalarValue::BinaryView(result)))
                 }
                 other => {
                     exec_err!("unsupported data type '{other:?}' for udf {}", self.name())

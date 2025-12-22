@@ -46,14 +46,14 @@ impl ScalarUDFImpl for IntersectsUdf {
         if args.len() != 2 {
             return exec_err!("invalid number of arguments for udf {}", self.name());
         }
-        if args[0].data_type() != DataType::Binary {
+        if args[0].data_type() != DataType::BinaryView {
             return exec_err!(
                 "unsupported data type '{}' for udf {}",
                 args[0].data_type(),
                 self.name()
             );
         }
-        if args[1].data_type() != DataType::Binary {
+        if args[1].data_type() != DataType::BinaryView {
             return exec_err!(
                 "unsupported data type '{}' for udf {}",
                 args[1].data_type(),
@@ -63,8 +63,8 @@ impl ScalarUDFImpl for IntersectsUdf {
 
         match (&args[0], &args[1]) {
             (ColumnarValue::Array(wkb_arr1), ColumnarValue::Array(wkb_arr2)) => {
-                let wkb_arr1 = wkb_arr1.as_binary::<i32>();
-                let wkb_arr2 = wkb_arr2.as_binary::<i32>();
+                let wkb_arr1 = wkb_arr1.as_binary_view();
+                let wkb_arr2 = wkb_arr2.as_binary_view();
                 if wkb_arr1.len() != wkb_arr2.len() {
                     return exec_err!("array length mismatch for udf {}", self.name());
                 }
@@ -89,13 +89,13 @@ impl ScalarUDFImpl for IntersectsUdf {
             }
             (
                 ColumnarValue::Array(wkb_arr1),
-                ColumnarValue::Scalar(ScalarValue::Binary(wkb_opt2)),
+                ColumnarValue::Scalar(ScalarValue::BinaryView(wkb_opt2)),
             ) => {
                 let result = match wkb_opt2 {
                     Some(wkb2) => {
                         match Geometry::new_from_wkb(wkb2) {
                             Ok(geom2) => {
-                                let wkb_arr1 = wkb_arr1.as_binary::<i32>();
+                                let wkb_arr1 = wkb_arr1.as_binary_view();
                                 let result: BooleanArray = wkb_arr1
                                     .iter()
                                     .map(|opt| {
@@ -116,14 +116,14 @@ impl ScalarUDFImpl for IntersectsUdf {
                 Ok(ColumnarValue::Array(result))
             }
             (
-                ColumnarValue::Scalar(ScalarValue::Binary(wkb_opt1)),
+                ColumnarValue::Scalar(ScalarValue::BinaryView(wkb_opt1)),
                 ColumnarValue::Array(wkb_arr2),
             ) => {
                 let result = match wkb_opt1 {
                     Some(wkb1) => {
                         match Geometry::new_from_wkb(wkb1) {
                             Ok(geom1) => {
-                                let wkb_arr2 = wkb_arr2.as_binary::<i32>();
+                                let wkb_arr2 = wkb_arr2.as_binary_view();
                                 let result: BooleanArray = wkb_arr2
                                     .iter()
                                     .map(|opt| {
@@ -144,8 +144,8 @@ impl ScalarUDFImpl for IntersectsUdf {
                 Ok(ColumnarValue::Array(result))
             }
             (
-                ColumnarValue::Scalar(ScalarValue::Binary(wkb_opt1)),
-                ColumnarValue::Scalar(ScalarValue::Binary(wkb_opt2)),
+                ColumnarValue::Scalar(ScalarValue::BinaryView(wkb_opt1)),
+                ColumnarValue::Scalar(ScalarValue::BinaryView(wkb_opt2)),
             ) => {
                 let result = match (wkb_opt1, wkb_opt2) {
                     (Some(wkb1), Some(wkb2)) => {
@@ -193,6 +193,6 @@ impl ScalarUDFImpl for IntersectsUdf {
                 self.name()
             );
         }
-        Ok(vec![DataType::Binary, DataType::Binary])
+        Ok(vec![DataType::BinaryView, DataType::BinaryView])
     }
 }

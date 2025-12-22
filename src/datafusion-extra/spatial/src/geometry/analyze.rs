@@ -227,7 +227,7 @@ impl Accumulator for AnalyzeAccumulator {
                 "No input arrays provided to accumulator".to_owned(),
             ));
         }
-        let wkb_array = values[0].as_binary::<i32>();
+        let wkb_array = values[0].as_binary_view();
         for wkb in wkb_array {
             if let Some(wkb) = wkb
                 && let Ok(wkb) = Wkb::try_new(wkb)
@@ -273,7 +273,7 @@ impl Accumulator for AnalyzeAccumulator {
     fn state(&mut self) -> DFResult<Vec<ScalarValue>> {
         if self.stats.total_geometries().unwrap_or(0) == 0 {
             // Return null if no data was processed
-            return Ok(vec![ScalarValue::Binary(None)]);
+            return Ok(vec![ScalarValue::BinaryView(None)]);
         }
 
         // Serialize the statistics to JSON
@@ -290,7 +290,7 @@ impl Accumulator for AnalyzeAccumulator {
         }
 
         let array = &states[0];
-        let binary_array = array.as_binary::<i32>();
+        let binary_array = array.as_binary_view();
 
         for i in 0..binary_array.len() {
             if binary_array.is_null(i) {

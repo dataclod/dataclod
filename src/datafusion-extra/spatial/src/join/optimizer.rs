@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use datafusion::common::tree_node::{Transformed, TreeNode};
+use datafusion::common::tree_node::{Transformed, TreeNode, TreeNodeRecursion};
 use datafusion::common::{HashMap, JoinSide, Result};
 use datafusion::config::ConfigOptions;
 use datafusion::execution::session_state::SessionStateBuilder;
+use datafusion::logical_expr::expr::ScalarFunction;
 use datafusion::logical_expr::{Filter, Join, JoinType, LogicalPlan, Operator};
 use datafusion::optimizer::{ApplyOrder, OptimizerConfig, OptimizerRule};
 use datafusion::physical_expr::expressions::{BinaryExpr, Column};
@@ -20,6 +21,7 @@ use crate::join::exec::SpatialJoinExec;
 use crate::join::spatial_predicate::{
     DistancePredicate, RelationPredicate, SpatialPredicate, SpatialRelationType,
 };
+use crate::option::DataClodOptions;
 
 /// Physical planner extension for spatial joins
 ///
@@ -91,8 +93,16 @@ impl OptimizerRule for SpatialJoinOptimizer {
     /// Please refer to the `PhysicalOptimizerRule` implementation of this
     /// struct and [`SpatialJoinOptimizer::try_optimize_join`] for details.
     fn rewrite(
-        &self, plan: LogicalPlan, _config: &dyn OptimizerConfig,
+        &self, plan: LogicalPlan, config: &dyn OptimizerConfig,
     ) -> Result<Transformed<LogicalPlan>> {
+        let options = config.options();
+        let Some(extension) = options.extensions.get::<DataClodOptions>() else {
+            return Ok(Transformed::no(plan));
+        };
+        if !extension.spatial_join.enable {
+            return Ok(Transformed::no(plan));
+        }
+
         let LogicalPlan::Filter(Filter {
             predicate, input, ..
         }) = &plan
@@ -146,9 +156,7 @@ impl OptimizerRule for SpatialJoinOptimizer {
 /// originates from a filter logical node.
 fn is_spatial_predicate(expr: &Expr) -> bool {
     fn is_distance_expr(expr: &Expr) -> bool {
-        let Expr::ScalarFunction(datafusion::logical_expr::expr::ScalarFunction { func, .. }) =
-            expr
-        else {
+        let Expr::ScalarFunction(ScalarFunction { func, .. }) = expr else {
             return false;
         };
         func.name().to_lowercase() == "st_distance"
@@ -163,7 +171,7 @@ fn is_spatial_predicate(expr: &Expr) -> bool {
                 _ => false,
             }
         }
-        Expr::ScalarFunction(datafusion::logical_expr::expr::ScalarFunction { func, .. }) => {
+        Expr::ScalarFunction(ScalarFunction { func, .. }) => {
             let func_name = func.name().to_lowercase();
             matches!(
                 func_name.as_str(),
@@ -178,7 +186,6 @@ fn is_spatial_predicate(expr: &Expr) -> bool {
                     | "st_overlaps"
                     | "st_equals"
                     | "st_dwithin"
-                    | "st_knn"
             )
         }
         _ => false,
@@ -253,6 +260,7 @@ impl SpatialJoinOptimizer {
 pub fn register_spatial_join_optimizer(
     session_state_builder: SessionStateBuilder,
 ) -> SessionStateBuilder {
+    tg_geom::init_mimalloc();
     session_state_builder
         .with_optimizer_rule(Arc::new(SpatialJoinOptimizer))
         .with_physical_optimizer_rule(Arc::new(SpatialJoinOptimizer))
@@ -481,7 +489,7 @@ fn collect_column_references(
             collected_column_indices.push(column_info.clone());
         }
 
-        Ok(datafusion::common::tree_node::TreeNodeRecursion::Continue)
+        Ok(TreeNodeRecursion::Continue)
     })
     .expect("Failed to collect column references");
 

@@ -285,6 +285,6 @@ impl GeoStatistics {
             DataFusionError::Internal(format!("Failed to serialize GeoStatistics: {e}"))
         })?;
 
-        Ok(ScalarValue::Binary(Some(serialized)))
+        Ok(ScalarValue::BinaryView(Some(serialized)))
     }
 }
