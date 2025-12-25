@@ -1,11 +1,15 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use dataclod::sql_to_statement;
+use dataclod::QueryContext;
 use datafusion::sql::parser::Statement;
 use pgwire::api::Type;
 use pgwire::api::stmt::QueryParser;
 use pgwire::error::{PgWireError, PgWireResult};
 
-pub struct DataClodQueryParser;
+pub struct DataClodQueryParser {
+    pub session_context: Arc<QueryContext>,
+}
 
 #[async_trait]
 impl QueryParser for DataClodQueryParser {
@@ -14,6 +18,8 @@ impl QueryParser for DataClodQueryParser {
     async fn parse_sql<C>(
         &self, _client: &C, sql: &str, _types: &[Option<Type>],
     ) -> PgWireResult<Self::Statement> {
-        sql_to_statement(sql).map_err(|e| PgWireError::ApiError(Box::new(e)))
+        self.session_context
+            .sql_to_statement(sql)
+            .map_err(|e| PgWireError::ApiError(e.into_boxed_dyn_error()))
     }
 }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use dataclod::QueryContext;
 use datafusion::sql::parser::Statement;
+use datafusion::sql::sqlparser::ast::Statement as SqlStatement;
 use pgwire::api::portal::{Format, Portal};
 use pgwire::api::query::{ExtendedQueryHandler, SimpleQueryHandler};
 use pgwire::api::results::{DescribePortalResponse, DescribeStatementResponse, Response, Tag};
@@ -31,18 +32,20 @@ impl SimpleQueryHandler for SimplePostgresBackend {
     async fn do_query<C>(&self, _client: &mut C, query: &str) -> PgWireResult<Vec<Response>> {
         debug!("simple query: {}", query);
 
-        let stmt =
-            dataclod::sql_to_statement(query).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        let stmt = self
+            .session_context
+            .sql_to_statement(query)
+            .map_err(|e| PgWireError::ApiError(e.into_boxed_dyn_error()))?;
 
-        if let Statement::Statement(stmt) = stmt {
+        if let Statement::Statement(stmt) = &stmt {
             match stmt.as_ref() {
-                datafusion::sql::sqlparser::ast::Statement::StartTransaction { .. } => {
+                SqlStatement::StartTransaction { .. } => {
                     return Ok(vec![Response::TransactionStart(Tag::new("BEGIN"))]);
                 }
-                datafusion::sql::sqlparser::ast::Statement::Commit { .. } => {
+                SqlStatement::Commit { .. } => {
                     return Ok(vec![Response::Execution(Tag::new("COMMIT"))]);
                 }
-                datafusion::sql::sqlparser::ast::Statement::Rollback { .. } => {
+                SqlStatement::Rollback { .. } => {
                     return Ok(vec![Response::TransactionEnd(Tag::new("ROLLBACK"))]);
                 }
                 _ => {}
@@ -59,7 +62,7 @@ impl SimpleQueryHandler for SimplePostgresBackend {
 
         let df = self
             .session_context
-            .sql(query)
+            .stmt(stmt)
             .await
             .map_err(|e| PgWireError::ApiError(e.into()))?;
         let resp = encode_dataframe(df, &Format::UnifiedText, DEFAULT_ROW_LIMIT).await?;
@@ -76,8 +79,8 @@ pub struct ExtendedPostgresBackend {
 impl ExtendedPostgresBackend {
     pub fn new(session_context: Arc<QueryContext>) -> Self {
         Self {
-            query_context: session_context,
-            query_parser: Arc::new(DataClodQueryParser),
+            query_context: session_context.clone(),
+            query_parser: Arc::new(DataClodQueryParser { session_context }),
         }
     }
 }
@@ -98,13 +101,13 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
 
         if let Statement::Statement(stmt) = &portal.statement.statement {
             match stmt.as_ref() {
-                datafusion::sql::sqlparser::ast::Statement::StartTransaction { .. } => {
+                SqlStatement::StartTransaction { .. } => {
                     return Ok(Response::TransactionStart(Tag::new("BEGIN")));
                 }
-                datafusion::sql::sqlparser::ast::Statement::Commit { .. } => {
+                SqlStatement::Commit { .. } => {
                     return Ok(Response::Execution(Tag::new("COMMIT")));
                 }
-                datafusion::sql::sqlparser::ast::Statement::Rollback { .. } => {
+                SqlStatement::Rollback { .. } => {
                     return Ok(Response::TransactionEnd(Tag::new("ROLLBACK")));
                 }
                 _ => {}
@@ -113,7 +116,7 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
 
         let df = self
             .query_context
-            .sql(&portal.statement.statement.to_string())
+            .stmt(portal.statement.statement.clone())
             .await
             .map_err(|e| PgWireError::ApiError(e.into()))?;
 

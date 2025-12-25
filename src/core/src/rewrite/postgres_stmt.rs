@@ -1,7 +1,11 @@
+use std::collections::HashSet;
+use std::ops::ControlFlow;
+
 use anyhow::Result;
 use datafusion::sql::parser::Statement;
 use datafusion::sql::sqlparser::ast::{
     Expr, Ident, SelectItem, SelectItemQualifiedWildcardKind, SetExpr, Statement as SqlStatement,
+    TypedString, Value, VisitMut, VisitorMut,
 };
 
 use super::StatementRewrite;
@@ -91,6 +95,85 @@ impl StatementRewrite for PostgresStmtRewrite {
                 }
                 select.projection = new_projection;
             }
+        }
+
+        Ok(stmt)
+    }
+}
+
+struct PostgresStmtVisitor<'a> {
+    unsupported_types: HashSet<&'a str>,
+}
+
+impl VisitorMut for PostgresStmtVisitor<'_> {
+    type Break = ();
+
+    fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
+        match expr {
+            // This is the key part: identify constants with type annotations.
+            Expr::TypedString(TypedString {
+                data_type, value, ..
+            }) => {
+                if self
+                    .unsupported_types
+                    .contains(data_type.to_string().to_lowercase().as_str())
+                {
+                    *expr =
+                        Expr::Value(Value::SingleQuotedString(value.to_string()).with_empty_span());
+                }
+            }
+            Expr::Cast {
+                data_type,
+                expr: value,
+                ..
+            } => {
+                if self
+                    .unsupported_types
+                    .contains(data_type.to_string().to_lowercase().as_str())
+                {
+                    *expr = *value.clone();
+                }
+            }
+            // Add more match arms for other expression types (e.g., `Function`, `InList`) as
+            // needed.
+            _ => {}
+        }
+
+        ControlFlow::Continue(())
+    }
+}
+
+#[derive(Debug)]
+pub struct PostgresStmtVisitorRewrite;
+
+impl StatementRewrite for PostgresStmtVisitorRewrite {
+    fn name(&self) -> &str {
+        "postgres_stmt_visitor_rewrite"
+    }
+
+    fn rewrite(&self, stmt: Statement) -> Result<Statement> {
+        let mut stmt = stmt;
+        if let Statement::Statement(sql_stmt) = &mut stmt
+            && let SqlStatement::Query(query) = sql_stmt.as_mut()
+            && let SetExpr::Select(_) = query.body.as_mut()
+        {
+            let mut visitor = PostgresStmtVisitor {
+                unsupported_types: HashSet::from([
+                    "regclass",
+                    "regproc",
+                    "regtype",
+                    "regtype[]",
+                    "regnamespace",
+                    "oid",
+                    "pg_catalog.regclass",
+                    "pg_catalog.regproc",
+                    "pg_catalog.regtype",
+                    "pg_catalog.regtype[]",
+                    "pg_catalog.regnamespace",
+                    "pg_catalog.oid",
+                ]),
+            };
+            let _ = sql_stmt.visit(&mut visitor);
         }
 
         Ok(stmt)

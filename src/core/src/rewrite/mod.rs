@@ -16,4 +16,5 @@ pub trait StatementRewrite: Debug {
 
 pub fn register_postgres_stmt_rewrites(ctx: &mut QueryContext) {
     ctx.register_statement_rewrite(Arc::new(postgres_stmt::PostgresStmtRewrite));
+    ctx.register_statement_rewrite(Arc::new(postgres_stmt::PostgresStmtVisitorRewrite));
 }

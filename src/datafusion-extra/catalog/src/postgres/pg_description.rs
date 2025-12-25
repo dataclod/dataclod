@@ -14,6 +14,8 @@ use datafusion::physical_plan::ExecutionPlan;
 
 struct PgCatalogDescriptionBuilder {
     objoid: UInt32Builder,
+    classoid: UInt32Builder,
+    objsubid: UInt32Builder,
     description: StringBuilder,
 }
 
@@ -23,6 +25,8 @@ impl PgCatalogDescriptionBuilder {
 
         Self {
             objoid: UInt32Builder::with_capacity(capacity),
+            classoid: UInt32Builder::with_capacity(capacity),
+            objsubid: UInt32Builder::with_capacity(capacity),
             description: StringBuilder::with_capacity(capacity, 0),
         }
     }
@@ -30,6 +34,8 @@ impl PgCatalogDescriptionBuilder {
     fn finish(&mut self) -> Vec<ArrayRef> {
         vec![
             Arc::new(self.objoid.finish()),
+            Arc::new(self.classoid.finish()),
+            Arc::new(self.objsubid.finish()),
             Arc::new(self.description.finish()),
         ]
     }
@@ -63,6 +69,8 @@ impl TableProvider for PgDescriptionTable {
     fn schema(&self) -> SchemaRef {
         Arc::new(Schema::new(vec![
             Field::new("objoid", DataType::UInt32, false),
+            Field::new("classoid", DataType::UInt32, false),
+            Field::new("objsubid", DataType::UInt32, false),
             Field::new("description", DataType::Utf8, false),
         ]))
     }

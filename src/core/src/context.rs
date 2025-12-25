@@ -51,10 +51,15 @@ impl QueryContext {
         Ok(df)
     }
 
+    pub async fn stmt(&self, stmt: SqlStatement) -> Result<DataFrame> {
+        let plan = self.statement_to_plan(stmt).await?;
+        let df = self.execute_logical_plan(plan).await?;
+        Ok(df)
+    }
+
     pub async fn create_logical_plan(&self, sql: &str) -> Result<LogicalPlan> {
         let statement = self.sql_to_statement(sql)?;
-        let rewrite_stmt = self.statement_rewrite(statement)?;
-        let plan = self.statement_to_plan(rewrite_stmt).await?;
+        let plan = self.statement_to_plan(statement).await?;
         Ok(plan)
     }
 
@@ -68,12 +73,12 @@ impl QueryContext {
         Ok(stmt)
     }
 
-    fn sql_to_statement(&self, sql: &str) -> Result<SqlStatement> {
+    pub fn sql_to_statement(&self, sql: &str) -> Result<SqlStatement> {
         let statement = self
             .inner
             .state()
             .sql_to_statement(sql, &Dialect::PostgreSQL)?;
-        Ok(statement)
+        self.statement_rewrite(statement)
     }
 
     pub async fn statement_to_plan(&self, statement: SqlStatement) -> Result<LogicalPlan> {

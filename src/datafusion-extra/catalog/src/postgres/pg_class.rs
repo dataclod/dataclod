@@ -14,12 +14,16 @@ use datafusion::physical_plan::ExecutionPlan;
 
 struct _PgClass<'a> {
     oid: u32,
+    relnamespace: u32,
     relkind: &'a str,
+    relpartbound: &'a str,
 }
 
 struct PgCatalogClassBuilder {
     oid: UInt32Builder,
+    relnamespace: UInt32Builder,
     relkind: StringBuilder,
+    relpartbound: StringBuilder,
 }
 
 impl PgCatalogClassBuilder {
@@ -28,17 +32,26 @@ impl PgCatalogClassBuilder {
 
         Self {
             oid: UInt32Builder::with_capacity(capacity),
+            relnamespace: UInt32Builder::with_capacity(capacity),
             relkind: StringBuilder::with_capacity(capacity, 0),
+            relpartbound: StringBuilder::with_capacity(capacity, 0),
         }
     }
 
     fn _add_class(&mut self, class: &_PgClass) {
         self.oid.append_value(class.oid);
+        self.relnamespace.append_value(class.relnamespace);
         self.relkind.append_value(class.relkind);
+        self.relpartbound.append_value(class.relpartbound);
     }
 
     fn finish(&mut self) -> Vec<ArrayRef> {
-        vec![Arc::new(self.oid.finish()), Arc::new(self.relkind.finish())]
+        vec![
+            Arc::new(self.oid.finish()),
+            Arc::new(self.relnamespace.finish()),
+            Arc::new(self.relkind.finish()),
+            Arc::new(self.relpartbound.finish()),
+        ]
     }
 }
 
@@ -70,7 +83,9 @@ impl TableProvider for PgClassTable {
     fn schema(&self) -> SchemaRef {
         Arc::new(Schema::new(vec![
             Field::new("oid", DataType::UInt32, false),
+            Field::new("relnamespace", DataType::UInt32, false),
             Field::new("relkind", DataType::Utf8, false),
+            Field::new("relpartbound", DataType::Utf8, false),
         ]))
     }
 

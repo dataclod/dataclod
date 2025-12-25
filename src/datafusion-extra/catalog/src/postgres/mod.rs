@@ -1,6 +1,8 @@
 mod pg_class;
 mod pg_database;
 mod pg_description;
+mod pg_get_expr_udf;
+mod pg_get_partkeydef_udf;
 mod pg_namespace;
 mod pg_type;
 
@@ -35,6 +37,9 @@ pub fn with_pg_catalog(ctx: &SessionContext) -> Result<()> {
         "public.pg_database",
         Arc::new(PgDatabaseTable::new(CURRENT_DATABASE)),
     )?;
+
+    ctx.register_udf(pg_get_expr_udf::create_pg_get_expr_udf());
+    ctx.register_udf(pg_get_partkeydef_udf::create_pg_get_partkeydef_udf());
 
     let default_catalog = ctx
         .catalog(&ctx.state().config_options().catalog.default_catalog)
