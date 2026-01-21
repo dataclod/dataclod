@@ -1,6 +1,4 @@
 use mimalloc::MiMalloc;
-#[cfg(test)]
-use rusky as _;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

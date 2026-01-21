@@ -1,0 +1,45 @@
+[package]
+name = "dataclod-sqllogictest"
+description = "DataClod sqllogictest driver"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "dataclod_sqllogictest"
+
+[dependencies]
+async-trait.workspace = true
+bigdecimal = "0.4"
+dataclod.workspace = true
+datafusion.workspace = true
+half = { version = "2.7", default-features = true }
+indicatif = "0.18"
+itertools = "0.14"
+log = "0.4"
+object_store = "0.13"
+sqllogictest = "0.29"
+thiserror = "2.0"
+tokio.workspace = true
+
+[dev-dependencies]
+clap = { version = "4.5", features = ["derive", "env"] }
+env_logger = "0.11"
+futures.workspace = true
+regex.workspace = true
+tokio.workspace = true
+
+[[test]]
+harness = false
+name = "sqllogictests"
+path = "bin/sqllogictests.rs"

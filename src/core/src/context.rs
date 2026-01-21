@@ -12,6 +12,7 @@ use parking_lot::RwLock;
 use crate::rewrite::StatementRewrite;
 use crate::state::QueryState;
 
+#[derive(Clone)]
 pub struct QueryContext {
     inner: SessionContext,
     state: Arc<RwLock<QueryState>>,
