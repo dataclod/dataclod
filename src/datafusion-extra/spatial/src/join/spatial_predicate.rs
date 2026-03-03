@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use datafusion::common::JoinSide;
+use datafusion::common::{JoinSide, Result, exec_err};
 use datafusion::physical_expr::PhysicalExpr;
+use datafusion::physical_plan::projection::{ProjectionExpr, update_expr};
 
 /// Spatial predicate is the join condition of a spatial join. It can be a
 /// distance predicate or a relation predicate.
@@ -156,5 +157,128 @@ impl std::fmt::Display for SpatialRelationType {
             SpatialRelationType::Overlaps => write!(f, "overlaps"),
             SpatialRelationType::Equals => write!(f, "equals"),
         }
+    }
+}
+
+/// Common operations needed by the planner/executor to keep spatial predicates
+/// valid when join inputs are swapped or projected.
+pub trait SpatialPredicateTrait: Sized {
+    /// Returns a semantically equivalent predicate after the join children are
+    /// swapped.
+    ///
+    /// Used by `SpatialJoinExec::swap_inputs` to keep the predicate aligned
+    /// with the new left/right inputs.
+    fn swap_for_swapped_children(&self) -> Self;
+
+    /// Rewrites the predicate to reference projected child expressions.
+    ///
+    /// Returns `Ok(None)` when the predicate cannot be expressed using the
+    /// projected inputs (so projection pushdown must be skipped).
+    fn update_for_child_projections(
+        &self, projected_left_exprs: &[ProjectionExpr], projected_right_exprs: &[ProjectionExpr],
+    ) -> Result<Option<Self>>;
+}
+
+impl SpatialPredicateTrait for SpatialPredicate {
+    fn swap_for_swapped_children(&self) -> Self {
+        match self {
+            SpatialPredicate::Relation(pred) => {
+                SpatialPredicate::Relation(pred.swap_for_swapped_children())
+            }
+            SpatialPredicate::Distance(pred) => {
+                SpatialPredicate::Distance(pred.swap_for_swapped_children())
+            }
+        }
+    }
+
+    fn update_for_child_projections(
+        &self, projected_left_exprs: &[ProjectionExpr], projected_right_exprs: &[ProjectionExpr],
+    ) -> Result<Option<Self>> {
+        match self {
+            SpatialPredicate::Relation(pred) => {
+                Ok(pred
+                    .update_for_child_projections(projected_left_exprs, projected_right_exprs)?
+                    .map(SpatialPredicate::Relation))
+            }
+            SpatialPredicate::Distance(pred) => {
+                Ok(pred
+                    .update_for_child_projections(projected_left_exprs, projected_right_exprs)?
+                    .map(SpatialPredicate::Distance))
+            }
+        }
+    }
+}
+
+impl SpatialPredicateTrait for RelationPredicate {
+    fn swap_for_swapped_children(&self) -> Self {
+        Self {
+            left: self.right.clone(),
+            right: self.left.clone(),
+            relation_type: self.relation_type.invert(),
+        }
+    }
+
+    fn update_for_child_projections(
+        &self, projected_left_exprs: &[ProjectionExpr], projected_right_exprs: &[ProjectionExpr],
+    ) -> Result<Option<Self>> {
+        let Some(left) = update_expr(&self.left, projected_left_exprs, false)? else {
+            return Ok(None);
+        };
+        let Some(right) = update_expr(&self.right, projected_right_exprs, false)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self {
+            left,
+            right,
+            relation_type: self.relation_type,
+        }))
+    }
+}
+
+impl SpatialPredicateTrait for DistancePredicate {
+    fn swap_for_swapped_children(&self) -> Self {
+        Self {
+            left: self.right.clone(),
+            right: self.left.clone(),
+            distance: self.distance.clone(),
+            distance_side: self.distance_side.negate(),
+        }
+    }
+
+    fn update_for_child_projections(
+        &self, projected_left_exprs: &[ProjectionExpr], projected_right_exprs: &[ProjectionExpr],
+    ) -> Result<Option<Self>> {
+        let Some(left) = update_expr(&self.left, projected_left_exprs, false)? else {
+            return Ok(None);
+        };
+        let Some(right) = update_expr(&self.right, projected_right_exprs, false)? else {
+            return Ok(None);
+        };
+
+        let distance = match self.distance_side {
+            JoinSide::Left => {
+                let Some(distance) = update_expr(&self.distance, projected_left_exprs, false)?
+                else {
+                    return Ok(None);
+                };
+                distance
+            }
+            JoinSide::Right => {
+                let Some(distance) = update_expr(&self.distance, projected_right_exprs, false)?
+                else {
+                    return Ok(None);
+                };
+                distance
+            }
+            JoinSide::None => self.distance.clone(),
+        };
+
+        Ok(Some(Self {
+            left,
+            right,
+            distance,
+            distance_side: self.distance_side,
+        }))
     }
 }

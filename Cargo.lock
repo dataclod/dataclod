@@ -1982,8 +1982,10 @@ name = "datafusion-spatial"
 version = "0.0.2"
 dependencies = [
  "anyhow",
+ "async-trait",
  "byteorder",
  "datafusion",
+ "fastrand",
  "float_next_after",
  "futures",
  "geo",
@@ -1993,12 +1995,15 @@ dependencies = [
  "geos",
  "libc",
  "parking_lot",
+ "pin-project-lite",
  "proj4rs",
  "regex",
  "serde",
  "serde_json",
  "serde_with",
  "tg-geom",
+ "tokio",
+ "tracing",
  "wkb",
 ]
 

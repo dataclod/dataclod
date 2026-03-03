@@ -34,7 +34,7 @@ pub fn value_normalizer(s: &String) -> String {
 }
 
 pub fn read_dir_recursive<P: AsRef<Path>>(path: P) -> Result<Vec<PathBuf>> {
-    let mut dst = vec![];
+    let mut dst = Vec::new();
     read_dir_recursive_impl(&mut dst, path.as_ref())?;
     Ok(dst)
 }

@@ -1,4 +1,6 @@
 pub mod build_side_collector;
+pub mod memory_plan;
+pub mod partitioned_index_provider;
 pub mod spatial_index;
 pub mod spatial_index_builder;
 

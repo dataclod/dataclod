@@ -33,7 +33,7 @@ impl QueryContext {
         let state_builder = SessionStateBuilder::new()
             .with_config(config)
             .with_default_features();
-        let state_builder = datafusion_spatial::register_spatial_join_optimizer(state_builder);
+        let state_builder = datafusion_spatial::register_planner(state_builder);
         let state = state_builder.build();
         let ctx = SessionContext::new_with_state(state);
         datafusion_catalog_extra::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");

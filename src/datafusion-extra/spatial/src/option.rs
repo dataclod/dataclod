@@ -48,9 +48,105 @@ config_namespace! {
         /// The execution mode determining how prepared geometries are used
         pub execution_mode: ExecutionMode, default = ExecutionMode::Speculative(DEFAULT_SPECULATIVE_THRESHOLD)
 
-   /// Collect build side partitions concurrently (using spawned tasks).
+        /// Collect build side partitions concurrently (using spawned tasks).
         /// Set to false for contexts where spawning new tasks is not supported.
         pub concurrent_build_side_collection: bool, default = true
+
+        /// Repartition the probe side before performing spatial join. This can improve performance by
+        /// balancing the workload, especially for skewed datasets or large sorted datasets where spatial
+        /// locality might cause imbalanced partitions when running out-of-core spatial join.
+        pub repartition_probe_side: bool, default = true
+
+        /// Maximum number of sample bounding boxes collected from the index side for partitioning the
+        /// data when running out-of-core spatial join
+        pub max_index_side_bbox_samples: usize, default = 10000
+
+        /// Minimum number of sample bounding boxes collected from the index side for partitioning the
+        /// data when running out-of-core spatial join
+        pub min_index_side_bbox_samples: usize, default = 1000
+
+        /// Target sampling rate for sampling bounding boxes from the index side for partitioning the
+        /// data when running out-of-core spatial join
+        pub target_index_side_bbox_sampling_rate: f64, default = 0.01
+
+        /// The in memory size threshold of batches written to spill files. If the spilled batch is
+        /// too large, it will be broken into several smaller parts before written to spill files.
+        /// This is for avoiding overshooting the memory limit when reading spilled batches from
+        /// spill files. Specify 0 for unlimited size.
+        pub spilled_batch_in_memory_size_threshold: usize, default = 0
+
+        /// The minimum number of geometry pairs per chunk required to enable parallel
+        /// refinement during the spatial join operation. When the refinement phase has
+        /// fewer geometry pairs than this threshold, it will run sequentially instead
+        /// of spawning parallel tasks. Higher values reduce parallelization overhead
+        /// for small datasets, while lower values enable more fine-grained parallelism.
+        pub parallel_refinement_chunk_size: usize, default = 8192
+
+        /// Options for debugging or testing spatial join
+        pub debug : SpatialJoinDebugOptions, default = SpatialJoinDebugOptions::default()
+    }
+}
+
+config_namespace! {
+    /// Configurations for debugging or testing spatial join
+    pub struct SpatialJoinDebugOptions {
+        /// Number of spatial partitions to use for spatial join
+        pub num_spatial_partitions: NumSpatialPartitionsConfig, default = NumSpatialPartitionsConfig::Auto
+
+        /// The amount of memory for intermittent usage such as spatially repartitioning the data
+        pub memory_for_intermittent_usage: Option<usize>, default = None
+
+        /// Force spilling while collecting the build side or not
+        pub force_spill: bool, default = false
+
+        /// Seed for random processes in the spatial join for testing purpose
+        pub random_seed: Option<u64>, default = None
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum NumSpatialPartitionsConfig {
+    /// Automatically determine the number of spatial partitions
+    Auto,
+
+    /// Use a fixed number of spatial partitions
+    Fixed(usize),
+}
+
+impl ConfigField for NumSpatialPartitionsConfig {
+    fn visit<V: Visit>(&self, v: &mut V, key: &str, description: &'static str) {
+        let value = match self {
+            NumSpatialPartitionsConfig::Auto => "auto".into(),
+            NumSpatialPartitionsConfig::Fixed(n) => format!("{n}"),
+        };
+        v.some(key, value, description);
+    }
+
+    fn set(&mut self, _key: &str, value: &str) -> Result<()> {
+        let value = value.to_lowercase();
+        let config = match value.as_str() {
+            "auto" => NumSpatialPartitionsConfig::Auto,
+            _ => {
+                match value.parse::<usize>() {
+                    Ok(n) => {
+                        if n > 0 {
+                            NumSpatialPartitionsConfig::Fixed(n)
+                        } else {
+                            return Err(DataFusionError::Configuration(
+                                "num_spatial_partitions must be greater than 0".to_owned(),
+                            ));
+                        }
+                    }
+                    Err(_) => {
+                        return Err(DataFusionError::Configuration(format!(
+                            "Unknown num_spatial_partitions config: {value}. Expected formats: auto, <number>"
+                        )));
+                    }
+                }
+            }
+        };
+        *self = config;
+        Ok(())
     }
 }
 

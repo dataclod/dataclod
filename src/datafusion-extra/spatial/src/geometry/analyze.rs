@@ -9,7 +9,6 @@ use datafusion::common::Result as DFResult;
 use datafusion::error::DataFusionError;
 use datafusion::logical_expr::Accumulator;
 use datafusion::scalar::ScalarValue;
-use geo_traits::{GeometryTrait, GeometryType};
 use wkb::reader::Wkb;
 
 use crate::geometry::bounding_box::BoundingBox;
@@ -19,9 +18,12 @@ use crate::geometry::point_count::count_points;
 use crate::geometry::types::{GeometryTypeAndDimensions, GeometryTypeId};
 use crate::statistics::GeoStatistics;
 
-/// Contains analysis results for a geometry
+/// Captures the size, bounds, and type-derived counts for a single geometry.
+/// Used as the per-geometry input that eventually feeds aggregated
+/// `GeoStatistics`.
 #[derive(Debug, Clone)]
-pub struct GeometryAnalysis {
+pub struct GeometrySummary {
+    pub size_bytes: usize,
     pub point_count: i64,
     pub geometry_type: GeometryTypeAndDimensions,
     pub bbox: BoundingBox,
@@ -33,25 +35,12 @@ pub struct GeometryAnalysis {
 
 /// Analyzes a WKB geometry and returns its size, point count, dimensions, and
 /// type
-pub fn analyze_geometry(geom: &Wkb) -> Result<GeometryAnalysis> {
+pub fn analyze_geometry(geom: &Wkb) -> Result<GeometrySummary> {
+    // Get size in bytes directly from WKB buffer
+    let size_bytes = geom.buf().len();
+
     // Get geometry type using as_type() which is public
-    let geom_type = geom.as_type();
-    let wkb_type_id = match geom_type {
-        GeometryType::Point(_) => 1,
-        GeometryType::LineString(_) => 2,
-        GeometryType::Polygon(_) => 3,
-        GeometryType::MultiPoint(_) => 4,
-        GeometryType::MultiLineString(_) => 5,
-        GeometryType::MultiPolygon(_) => 6,
-        GeometryType::GeometryCollection(_) => 7,
-        _ => 0,
-    };
-
-    // Handle the Result properly
-    let geometry_type_id =
-        GeometryTypeId::try_from_wkb_id(wkb_type_id).unwrap_or(GeometryTypeId::Geometry);
-
-    let geometry_type = GeometryTypeAndDimensions::new(geometry_type_id, geom.dim());
+    let geometry_type = GeometryTypeAndDimensions::try_from_geom(geom)?;
 
     // Get point count directly using the geometry traits
     let point_count = count_points(geom);
@@ -64,23 +53,27 @@ pub fn analyze_geometry(geom: &Wkb) -> Result<GeometryAnalysis> {
 
     // Determine geometry type counts directly
     let puntal_count = matches!(
-        geom_type,
-        GeometryType::Point(_) | GeometryType::MultiPoint(_)
+        geometry_type.geometry_type(),
+        GeometryTypeId::Point | GeometryTypeId::MultiPoint
     ) as i64;
 
     let lineal_count = matches!(
-        geom_type,
-        GeometryType::LineString(_) | GeometryType::Line(_) | GeometryType::MultiLineString(_)
+        geometry_type.geometry_type(),
+        GeometryTypeId::LineString | GeometryTypeId::MultiLineString
     ) as i64;
 
     let polygonal_count = matches!(
-        geom_type,
-        GeometryType::Polygon(_) | GeometryType::MultiPolygon(_)
+        geometry_type.geometry_type(),
+        GeometryTypeId::Polygon | GeometryTypeId::MultiPolygon
     ) as i64;
 
-    let collection_count = matches!(geom_type, GeometryType::GeometryCollection(_)) as i64;
+    let collection_count = matches!(
+        geometry_type.geometry_type(),
+        GeometryTypeId::GeometryCollection
+    ) as i64;
 
-    Ok(GeometryAnalysis {
+    Ok(GeometrySummary {
+        size_bytes,
         point_count,
         geometry_type,
         bbox,
@@ -103,25 +96,29 @@ impl AnalyzeAccumulator {
         }
     }
 
-    pub fn update_statistics(&mut self, geom: &Wkb, size_bytes: usize) -> DFResult<()> {
+    pub fn update_statistics(&mut self, geom: &Wkb) -> DFResult<()> {
         // Get geometry analysis information
-        let analysis = analyze_geometry(geom)
+        let summary = analyze_geometry(geom)
             .map_err(|e| DataFusionError::External(e.into_boxed_dyn_error()))?;
 
+        self.ingest_geometry_summary(&summary);
+
+        Ok(())
+    }
+
+    pub fn ingest_geometry_summary(&mut self, summary: &GeometrySummary) {
         // Start with a clone of the current stats
         let mut stats = self.stats.clone();
 
         // Update each component of the statistics
-        stats = self.update_basic_counts(stats, size_bytes);
-        stats = self.update_geometry_type_counts(stats, &analysis);
-        stats = self.update_point_count(stats, analysis.point_count);
-        stats = self.update_envelope_info(stats, &analysis);
-        stats = self.update_geometry_types(stats, analysis.geometry_type);
+        stats = self.update_basic_counts(stats, summary.size_bytes);
+        stats = self.update_geometry_type_counts(stats, summary);
+        stats = self.update_point_count(stats, summary.point_count);
+        stats = self.update_envelope_info(stats, summary);
+        stats = self.update_geometry_types(stats, summary.geometry_type);
 
         // Assign the updated stats back to self.stats
         self.stats = stats;
-
-        Ok(())
     }
 
     pub fn finish(self) -> GeoStatistics {
@@ -139,7 +136,7 @@ impl AnalyzeAccumulator {
 
     // Update geometry type counts
     fn update_geometry_type_counts(
-        &self, stats: GeoStatistics, analysis: &GeometryAnalysis,
+        &self, stats: GeoStatistics, analysis: &GeometrySummary,
     ) -> GeoStatistics {
         // Add the counts from analysis to existing stats
         let puntal = stats.puntal_count().unwrap_or(0) + analysis.puntal_count;
@@ -162,7 +159,7 @@ impl AnalyzeAccumulator {
 
     // Update envelope dimensions and bounding box
     fn update_envelope_info(
-        &self, stats: GeoStatistics, analysis: &GeometryAnalysis,
+        &self, stats: GeoStatistics, analysis: &GeometrySummary,
     ) -> GeoStatistics {
         // The bbox is directly available on analysis, not wrapped in an Option
         let bbox = &analysis.bbox;
@@ -232,7 +229,7 @@ impl Accumulator for AnalyzeAccumulator {
             if let Some(wkb) = wkb
                 && let Ok(wkb) = Wkb::try_new(wkb)
             {
-                self.update_statistics(&wkb, wkb.buf().len())?;
+                self.update_statistics(&wkb)?;
             }
         }
         Ok(())

@@ -27,6 +27,7 @@ macro_use_extern_crate = "warn"
 single_use_lifetimes = "warn"
 trivial_casts = "warn"
 trivial_numeric_casts = "warn"
+unused = { level = "allow", priority = 1 }
 unused_extern_crates = "warn"
 unused_import_braces = "warn"
 unused_lifetimes = "warn"

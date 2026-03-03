@@ -15,7 +15,7 @@ use crate::engines::output::DFColumnType;
 
 /// Converts `batches` to a result as expected by sqllogictest.
 pub fn convert_batches(schema: &Schema, batches: Vec<RecordBatch>) -> Result<Vec<Vec<String>>> {
-    let mut rows = vec![];
+    let mut rows = Vec::new();
     for batch in batches {
         // Verify schema
         if !schema.contains(&batch.schema()) {

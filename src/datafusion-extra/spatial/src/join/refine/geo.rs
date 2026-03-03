@@ -47,7 +47,7 @@ impl SelectOptimalMode for GeoOptimalModeSelector {
 }
 
 /// A refiner that uses the geo library to evaluate spatial predicates.
-pub(crate) struct GeoRefiner {
+pub struct GeoRefiner {
     evaluator: Box<dyn GeoPredicateEvaluator>,
     exec_mode: OnceLock<ExecutionMode>,
     exec_mode_selector: Option<ExecModeSelector>,
@@ -143,6 +143,10 @@ impl IndexQueryResultRefiner for GeoRefiner {
                 )
             }
         }
+    }
+
+    fn estimate_max_memory_usage(&self, _build_stats: &GeoStatistics) -> usize {
+        0
     }
 
     fn mem_usage(&self) -> usize {

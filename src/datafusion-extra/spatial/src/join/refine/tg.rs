@@ -110,7 +110,7 @@ impl SelectOptimalMode for TgOptimalModeSelector {
 
 /// A refiner that uses the tiny geometry library to evaluate spatial
 /// predicates.
-pub(crate) struct TgRefiner {
+pub struct TgRefiner {
     evaluator: Box<dyn TgPredicateEvaluator>,
     prepared_geoms: InitOnceArray<Option<Geom>>,
     index_type: IndexKind,
@@ -239,6 +239,10 @@ impl IndexQueryResultRefiner for TgRefiner {
                 )
             }
         }
+    }
+
+    fn estimate_max_memory_usage(&self, build_stats: &GeoStatistics) -> usize {
+        build_stats.total_size_bytes().unwrap_or(0) as usize * 2
     }
 
     fn mem_usage(&self) -> usize {

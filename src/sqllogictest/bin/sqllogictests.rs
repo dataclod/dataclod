@@ -213,7 +213,7 @@ async fn run_file_in_runner<D: AsyncDB, M: MakeConnection<Conn = D>>(
 ) -> Result<()> {
     let path = path.canonicalize()?;
     let records = parse_file(&path).map_err(|e| DataFusionError::External(Box::new(e)))?;
-    let mut errs = vec![];
+    let mut errs = Vec::new();
     for record in records {
         if let Record::Halt { .. } = record {
             break;
@@ -252,29 +252,27 @@ fn get_record_count(path: &PathBuf, label: String) -> u64 {
 
     records.iter().for_each(|rec| {
         match rec {
-            Record::Query { conditions, .. } => {
-                if conditions.is_empty()
+            Record::Query { conditions, .. }
+                if (conditions.is_empty()
                     || !conditions.contains(&Condition::SkipIf {
                         label: label.clone(),
                     })
                     || conditions.contains(&Condition::OnlyIf {
                         label: label.clone(),
-                    })
-                {
-                    count += 1;
-                }
+                    })) =>
+            {
+                count += 1;
             }
-            Record::Statement { conditions, .. } => {
-                if conditions.is_empty()
+            Record::Statement { conditions, .. }
+                if (conditions.is_empty()
                     || !conditions.contains(&Condition::SkipIf {
                         label: label.clone(),
                     })
                     || conditions.contains(&Condition::OnlyIf {
                         label: label.clone(),
-                    })
-                {
-                    count += 1;
-                }
+                    })) =>
+            {
+                count += 1;
             }
             _ => {}
         }

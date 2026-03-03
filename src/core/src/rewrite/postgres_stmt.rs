@@ -113,26 +113,21 @@ impl VisitorMut for PostgresStmtVisitor<'_> {
             // This is the key part: identify constants with type annotations.
             Expr::TypedString(TypedString {
                 data_type, value, ..
-            }) => {
-                if self
-                    .unsupported_types
-                    .contains(data_type.to_string().to_lowercase().as_str())
-                {
-                    *expr =
-                        Expr::Value(Value::SingleQuotedString(value.to_string()).with_empty_span());
-                }
+            }) if self
+                .unsupported_types
+                .contains(data_type.to_string().to_lowercase().as_str()) =>
+            {
+                *expr = Expr::Value(Value::SingleQuotedString(value.to_string()).with_empty_span());
             }
             Expr::Cast {
                 data_type,
                 expr: value,
                 ..
-            } => {
-                if self
-                    .unsupported_types
-                    .contains(data_type.to_string().to_lowercase().as_str())
-                {
-                    *expr = *value.clone();
-                }
+            } if self
+                .unsupported_types
+                .contains(data_type.to_string().to_lowercase().as_str()) =>
+            {
+                *expr = *value.clone();
             }
             // Add more match arms for other expression types (e.g., `Function`, `InList`) as
             // needed.

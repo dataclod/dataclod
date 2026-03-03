@@ -16,6 +16,7 @@ use geo_types::Rect;
 use wkb::reader::Wkb;
 
 use crate::join::spatial_predicate::{DistancePredicate, RelationPredicate, SpatialPredicate};
+use crate::join::utils::arrow_utils::get_array_memory_size;
 
 /// Operand evaluator is for evaluating the operands of a spatial predicate. It
 /// can be a distance operand evaluator or a relation operand evaluator.
@@ -129,9 +130,11 @@ impl EvaluatedGeometryArray {
         &self.wkbs
     }
 
-    pub fn in_mem_size(&self) -> usize {
+    pub fn in_mem_size(&self) -> Result<usize> {
+        let geom_array_size = get_array_memory_size(&self.geometry_array)?;
+
         let distance_in_mem_size = match &self.distance {
-            Some(ColumnarValue::Array(array)) => array.get_array_memory_size(),
+            Some(ColumnarValue::Array(array)) => get_array_memory_size(array)?,
             _ => 8,
         };
 
@@ -140,10 +143,7 @@ impl EvaluatedGeometryArray {
         // much.
         let wkb_vec_size = self.wkbs.allocated_size();
 
-        self.geometry_array.get_array_memory_size()
-            + self.rects.allocated_size()
-            + distance_in_mem_size
-            + wkb_vec_size
+        Ok(geom_array_size + self.rects.allocated_size() + distance_in_mem_size + wkb_vec_size)
     }
 }
 
@@ -204,10 +204,9 @@ impl DistanceOperandEvaluator {
         match &distance_columnar_value {
             ColumnarValue::Scalar(ScalarValue::Float64(Some(distance))) => {
                 result.rects.iter_mut().for_each(|rect_opt| {
-                    let Some(rect) = rect_opt else {
-                        return;
+                    if let Some(rect) = rect_opt {
+                        expand_rect_in_place(rect, *distance);
                     };
-                    expand_rect_in_place(rect, *distance);
                 });
             }
             ColumnarValue::Scalar(ScalarValue::Float64(None)) => {
@@ -220,10 +219,9 @@ impl DistanceOperandEvaluator {
                     for (geom_idx, rect_opt) in result.rects.iter_mut().enumerate() {
                         if array.is_valid(geom_idx) {
                             let dist = array.value(geom_idx);
-                            let Some(rect) = rect_opt else {
-                                continue;
+                            if let Some(rect) = rect_opt {
+                                expand_rect_in_place(rect, dist);
                             };
-                            expand_rect_in_place(rect, dist);
                         }
                     }
                 } else {

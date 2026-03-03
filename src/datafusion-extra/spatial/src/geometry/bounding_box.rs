@@ -1,3 +1,4 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::geometry::interval::{Interval, IntervalTrait, WraparoundInterval};
@@ -20,11 +21,19 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
-    /// Create a `BoundingBox` with unspecified z and m intervals
+    /// Create a `BoundingBox`
     pub fn xy(x: impl Into<WraparoundInterval>, y: impl Into<Interval>) -> Self {
         Self {
             x: x.into(),
             y: y.into(),
+        }
+    }
+
+    /// Create an empty `BoundingBox`
+    pub fn empty() -> Self {
+        Self {
+            x: WraparoundInterval::empty(),
+            y: Interval::empty(),
         }
     }
 
@@ -38,16 +47,65 @@ impl BoundingBox {
         &self.y
     }
 
+    /// Check whether this `BoundingBox` is empty
+    pub fn is_empty(&self) -> bool {
+        self.x.is_empty() || self.y.is_empty()
+    }
+
+    /// Calculate intersection with another `BoundingBox`
+    ///
+    /// Returns true if this bounding box may intersect other or false
+    /// otherwise. This method will consider Z and M dimension if and only
+    /// if those dimensions are present in both bounding boxes.
+    pub fn intersects(&self, other: &Self) -> bool {
+        self.x.intersects_interval(&other.x) && self.y.intersects_interval(&other.y)
+    }
+
+    /// Calculate whether this bounding box contains another `BoundingBox`
+    ///
+    /// Returns true if this bounding box contains other or false otherwise.
+    /// This method will consider Z and M dimension if and only if those
+    /// dimensions are present in both bounding boxes.
+    pub fn contains(&self, other: &Self) -> bool {
+        self.x.contains_interval(&other.x) && self.y.contains_interval(&other.y)
+    }
+
+    /// Expand this `BoundingBox` by a given distance in x and y dimensions only
+    ///
+    /// Returns a new `BoundingBox` where x and y intervals are expanded by the
+    /// given distance. The x dimension (which may wrap around) is handled
+    /// correctly. Z and M dimensions are left unchanged.
+    pub fn expand_by(&self, distance: f64) -> Self {
+        Self {
+            x: self.x.expand_by(distance),
+            y: self.y.expand_by(distance),
+        }
+    }
+
     /// Update this `BoundingBox` to include the bounds of another
     ///
-    /// Note that this method is intended for accumulating bounds at the file
-    /// level and is not performant for accumulating bounds for individual
-    /// geometries. For this case, use a set of [Interval]s, (perhaps merging
-    /// them into [`WraparoundInterval`]s at the geometry or array level if
-    /// working with longitudes and latitudes and the performance overhead is
-    /// acceptable).
+    /// This method will propagate missingness of Z or M dimensions from the two
+    /// boxes (e.g., Z will be `None` if Z if `self.z().is_none()` OR
+    /// `other.z().is_none()`). Note that this method is intended for
+    /// accumulating bounds at the file level and is not performant for
+    /// accumulating bounds for individual geometries. For this case, use
+    /// a set of [Interval]s, (perhaps merging them into [`WraparoundInterval`]s
+    /// at the geometry or array level if working with longitudes and
+    /// latitudes and the performance overhead is acceptable).
     pub fn update_box(&mut self, other: &Self) {
         self.x = self.x.merge_interval(&other.x);
         self.y = self.y.merge_interval(&other.y);
+    }
+
+    /// Compute the intersection of this bounding box with another
+    ///
+    /// This method will propagate missingness of Z or M dimensions from the two
+    /// boxes (e.g., Z will be `None` if Z if `self.z().is_none()` OR
+    /// `other.z().is_none()`).
+    pub fn intersection(&self, other: &Self) -> Result<Self> {
+        Ok(Self {
+            x: self.x.intersection(&other.x)?,
+            y: self.y.intersection(&other.y)?,
+        })
     }
 }
