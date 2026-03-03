@@ -76,8 +76,8 @@ anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1"
 chrono = "0.4"
-datafusion = { version = "51", features = ["serde"] }
-datafusion-table-providers = { version = "0.9.0", features = [
+datafusion = { version = "52", features = ["serde"] }
+datafusion-table-providers = { version = "0.10.0", features = [
   "duckdb-federation",
   "mysql-federation",
   "postgres-federation",

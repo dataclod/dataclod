@@ -17,15 +17,13 @@ async-trait.workspace = true
 byteorder = "1.5"
 datafusion.workspace = true
 fastrand = "2.3"
-float_next_after = "1.0"
+float_next_after = "2.0"
 futures.workspace = true
 geo = "0.32.0"
-geo-index = "0.3.2"
+geo-index = "0.3.4"
 geo-traits = "0.3.0"
 geo-types = "0.7.18"
-geos = { git = "https://github.com/georust/geos.git", rev = "47afbad2483e489911ddb456417808340e9342c3", features = [
-  "v3_12_0",
-] }
+geos = { version = "11.1.1", features = ["v3_12_0"] }
 libc = "0.2"
 parking_lot.workspace = true
 pin-project-lite = "0.2"
@@ -33,7 +31,7 @@ proj4rs = "0.1.9"
 regex.workspace = true
 serde = "1.0"
 serde_json = "1.0"
-serde_with = "3.16"
+serde_with = "3"
 tg-geom = { version = "0.0.0", features = ["mimalloc"] }
 tokio.workspace = true
 tracing.workspace = true

@@ -95,10 +95,10 @@ pub async fn encode_dataframe(
                     if array.is_null(row) {
                         encoder.encode_field(&None::<i8>).unwrap();
                     } else {
-                        encode_value(&mut encoder, array, row).unwrap();
+                        encode_value(&mut encoder, array, row)?;
                     }
                 }
-                encoder.finish()
+                Ok(encoder.take_row())
             });
 
             stream::iter(row_stream)

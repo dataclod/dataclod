@@ -208,7 +208,7 @@ impl ExtensionOptions for DataClodOptions {
             }
         }
 
-        let mut v = Visitor(vec![]);
+        let mut v = Visitor(Vec::new());
         self.visit(&mut v, Self::PREFIX, "");
         v.0
     }
