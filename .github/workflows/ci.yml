@@ -23,6 +23,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt, clippy
+      - uses: taiki-e/install-action@cargo-shear
       - uses: taiki-e/install-action@taplo
 
       - name: install dependencies
@@ -30,10 +31,10 @@ jobs:
           rustc --version
           cargo --version
           sudo apt update
-          sudo apt install -y libgeos-dev
+          sudo apt install -y libgeos-dev libproj-dev
 
-      - name: cargo machete
-        uses: bnjbvr/cargo-machete@main
+      - name: cargo shear
+        run: cargo shear
 
       - name: spell check
         uses: crate-ci/typos@v1
@@ -67,7 +68,7 @@ jobs:
           rustc --version
           cargo --version
           sudo apt update
-          sudo apt install -y libgeos-dev
+          sudo apt install -y libgeos-dev libproj-dev
 
       - name: cargo build
         run: cargo build --workspace --all-targets --all-features

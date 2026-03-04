@@ -26,3 +26,6 @@ rusky = "0.2.1"
 [[bin]]
 name = "dataclod-core"
 path = "core/main.rs"
+
+[package.metadata.cargo-shear]
+ignored = ["rusky"]

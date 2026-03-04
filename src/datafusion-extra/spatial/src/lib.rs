@@ -1,3 +1,4 @@
+pub mod extension;
 mod function;
 mod geo_ext;
 mod geometry;

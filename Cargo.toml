@@ -17,6 +17,7 @@ members = [
   "src/datafusion-extra/catalog",
   "src/datafusion-extra/spatial",
   "src/datafusion-extra/sqlbuiltin",
+  "src/datafusion-extra/udf-macros",
   "src/server",
   "src/sqllogictest",
 ]
@@ -62,17 +63,19 @@ used_underscore_binding = "warn"
 
 [workspace.dependencies]
 # workspace dependencies
-common-exception = { path = "src/common/exception", version = "0.0.2" }
+# common-exception = { path = "src/common/exception", version = "0.0.2" }
 common-telemetry = { path = "src/common/telemetry", version = "0.0.2" }
 common-utils = { path = "src/common/utils", version = "0.0.2" }
 dataclod = { path = "src/core", version = "0.0.2" }
 datafusion-catalog-extra = { path = "src/datafusion-extra/catalog", version = "0.0.2" }
 datafusion-spatial = { path = "src/datafusion-extra/spatial", version = "0.0.2" }
 datafusion-sqlbuiltin = { path = "src/datafusion-extra/sqlbuiltin", version = "0.0.2" }
+datafusion-udf-macros = { path = "src/datafusion-extra/udf-macros", version = "0.0.2" }
 server = { package = "dataclod-server", path = "src/server", version = "0.0.2" }
 
 # crates.io dependencies
 anyhow = "1.0"
+arrow-schema = "57"
 async-trait = "0.1"
 bytes = "1"
 chrono = "0.4"
@@ -90,3 +93,6 @@ parking_lot = "0.12"
 regex = "1"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
+
+[workspace.metadata.cargo-shear]
+ignored = ["arrow-schema"]

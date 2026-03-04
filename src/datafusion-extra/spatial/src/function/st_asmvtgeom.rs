@@ -1,15 +1,13 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use arrow::array::{Array, AsArray, BinaryViewArray, new_null_array};
-use arrow::datatypes::{DataType, Field, FieldRef, Fields, Float64Type};
-use datafabric_common_schema::schema_ext::FIELD_TARGET_TYPE;
-use datafusion::common::{Result as DFResult, exec_err};
+use datafusion::arrow::array::{Array, AsArray, BinaryViewArray, new_null_array};
+use datafusion::arrow::datatypes::{DataType, Field, FieldRef, Fields, Float64Type};
+use datafusion::common::{Result as DFResult, ScalarValue, exec_err};
 use datafusion::logical_expr::{
     ColumnarValue, ReturnFieldArgs, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature,
     Volatility,
 };
-use datafusion::scalar::ScalarValue;
 use itertools::multizip;
 use lwgeom::{GBox, LWGeom};
 
@@ -22,11 +20,11 @@ fn box2d_type() -> DataType {
     ]))
 }
 
-pub fn st_asmvtgeom() -> Arc<ScalarUDF> {
-    Arc::new(ScalarUDF::new_from_impl(AsMVTGeomUdf {
+pub fn st_asmvtgeom() -> ScalarUDF {
+    ScalarUDF::new_from_impl(AsMVTGeomUdf {
         signature: Signature::user_defined(Volatility::Immutable),
-        aliases: vec!["st_asmvtgeom".to_string()],
-    }))
+        aliases: vec!["st_asmvtgeom".to_owned()],
+    })
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -52,14 +50,22 @@ impl ScalarUDFImpl for AsMVTGeomUdf {
         Ok(DataType::BinaryView)
     }
 
-    fn return_field_from_args(&self, _args: ReturnFieldArgs) -> DFResult<FieldRef> {
-        Ok(Arc::new(
-            Field::new(self.name(), DataType::BinaryView, true).with_metadata(
-                [(FIELD_TARGET_TYPE.to_string(), "geometry".to_string())]
-                    .into_iter()
-                    .collect(),
-            ),
-        ))
+    fn return_field_from_args(&self, args: ReturnFieldArgs) -> DFResult<FieldRef> {
+        if args
+            .arg_fields
+            .first()
+            .and_then(|field| field.extension_type_name())
+            != Some("Geometry")
+        {
+            return exec_err!(
+                "argument 1 to {} must have extension type 'Geometry'",
+                self.name()
+            );
+        }
+
+        let mut field = Field::new(self.name(), DataType::BinaryView, true);
+        field.try_with_extension_type(crate::extension::Geometry)?;
+        Ok(Arc::new(field))
     }
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {

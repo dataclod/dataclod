@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-use arrow::array::{Array, AsArray, BinaryViewArray, new_null_array};
-use arrow::datatypes::{DataType, Field, FieldRef, Int64Type};
-use datafabric_common_schema::schema_ext::FIELD_TARGET_TYPE;
+use datafusion::arrow::array::{Array, AsArray, BinaryViewArray, new_null_array};
+use datafusion::arrow::datatypes::{DataType, Field, FieldRef, Int64Type};
 use datafusion::common::{Result as DFResult, ScalarValue, exec_err};
 use datafusion::logical_expr::{
     ColumnarValue, ReturnFieldArgs, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature,
@@ -14,13 +13,13 @@ use datafusion::logical_expr::{
 use geos::{Geom, Geometry};
 use proj4rs::Proj;
 
-use crate::utils::GeosExt;
+use crate::geos_ext::GeosExt;
 
-pub fn st_transform() -> Arc<ScalarUDF> {
-    Arc::new(ScalarUDF::new_from_impl(TransformUdf {
+pub fn st_transform() -> ScalarUDF {
+    ScalarUDF::new_from_impl(TransformUdf {
         signature: Signature::user_defined(Volatility::Immutable),
         aliases: vec!["st_transform".to_owned()],
-    }))
+    })
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -46,14 +45,22 @@ impl ScalarUDFImpl for TransformUdf {
         Ok(DataType::BinaryView)
     }
 
-    fn return_field_from_args(&self, _args: ReturnFieldArgs) -> DFResult<FieldRef> {
-        Ok(Arc::new(
-            Field::new(self.name(), DataType::BinaryView, true).with_metadata(
-                [(FIELD_TARGET_TYPE.to_string(), "geometry".to_string())]
-                    .into_iter()
-                    .collect(),
-            ),
-        ))
+    fn return_field_from_args(&self, args: ReturnFieldArgs) -> DFResult<FieldRef> {
+        if args
+            .arg_fields
+            .first()
+            .and_then(|field| field.extension_type_name())
+            != Some("Geometry")
+        {
+            return exec_err!(
+                "argument 1 to {} must have extension type 'Geometry'",
+                self.name()
+            );
+        }
+
+        let mut field = Field::new(self.name(), DataType::BinaryView, true);
+        field.try_with_extension_type(crate::extension::Geometry)?;
+        Ok(Arc::new(field))
     }
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {
@@ -196,7 +203,7 @@ impl ScalarUDFImpl for TransformUdf {
                                             match opt {
                                                 Some(dst_srid) => {
                                                     if dst_srid == src_srid as i64 {
-                                                        Some(wkb.to_vec())
+                                                        Some(wkb.clone())
                                                     } else if let Ok(dst_proj) =
                                                         Proj::from_epsg_code(dst_srid as u16)
                                                     {
@@ -244,7 +251,7 @@ impl ScalarUDFImpl for TransformUdf {
                             (Ok(geom), Ok(dst_proj)) => {
                                 if let Ok(src_srid) = geom.get_srid() {
                                     if *dst_srid == src_srid as i64 {
-                                        Some(wkb.to_vec())
+                                        Some(wkb.clone())
                                     } else if let Ok(src_proj) =
                                         Proj::from_epsg_code(src_srid as u16)
                                     {
