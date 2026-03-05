@@ -7,6 +7,7 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use datafusion::arrow::array::*;
 use datafusion::arrow::datatypes::{DataType, IntervalMonthDayNano, IntervalUnit, TimeUnit};
 use datafusion::common::DFSchema;
+use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::DataFrame;
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::parser::Statement;
@@ -22,7 +23,7 @@ use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 
 use super::utils::*;
 
-pub fn encode_parameters(portal: &Portal<Statement>) -> PgWireResult<Vec<ScalarValue>> {
+pub fn encode_parameters<S: Clone>(portal: &Portal<S>) -> PgWireResult<Vec<ScalarValue>> {
     portal
         .statement
         .parameter_types

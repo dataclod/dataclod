@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use dataclod::QueryContext;
+use datafusion::logical_expr::{
+    LogicalPlan, Statement as LogicalStatement, TransactionConclusion, TransactionEnd,
+};
 use datafusion::sql::parser::Statement;
 use datafusion::sql::sqlparser::ast::Statement as SqlStatement;
 use pgwire::api::portal::{Format, Portal};
@@ -88,7 +91,7 @@ impl ExtendedPostgresBackend {
 #[async_trait]
 impl ExtendedQueryHandler for ExtendedPostgresBackend {
     type QueryParser = DataClodQueryParser;
-    type Statement = Statement;
+    type Statement = LogicalPlan;
 
     fn query_parser(&self) -> Arc<Self::QueryParser> {
         self.query_parser.clone()
@@ -97,17 +100,24 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
     async fn do_query<C>(
         &self, _client: &mut C, portal: &Portal<Self::Statement>, max_rows: usize,
     ) -> PgWireResult<Response> {
-        debug!("extend query: {}", portal.statement.statement);
+        let plan = &portal.statement.statement;
+        debug!("extend query plan: {}", plan.display());
 
-        if let Statement::Statement(stmt) = &portal.statement.statement {
-            match stmt.as_ref() {
-                SqlStatement::StartTransaction { .. } => {
+        if let LogicalPlan::Statement(stmt) = plan {
+            match stmt {
+                LogicalStatement::TransactionStart { .. } => {
                     return Ok(Response::TransactionStart(Tag::new("BEGIN")));
                 }
-                SqlStatement::Commit { .. } => {
-                    return Ok(Response::Execution(Tag::new("COMMIT")));
+                LogicalStatement::TransactionEnd(TransactionEnd {
+                    conclusion: TransactionConclusion::Commit,
+                    ..
+                }) => {
+                    return Ok(Response::TransactionEnd(Tag::new("COMMIT")));
                 }
-                SqlStatement::Rollback { .. } => {
+                LogicalStatement::TransactionEnd(TransactionEnd {
+                    conclusion: TransactionConclusion::Rollback,
+                    ..
+                }) => {
                     return Ok(Response::TransactionEnd(Tag::new("ROLLBACK")));
                 }
                 _ => {}
@@ -116,7 +126,7 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
 
         let df = self
             .query_context
-            .stmt(portal.statement.statement.clone())
+            .execute_logical_plan(plan.clone())
             .await
             .map_err(|e| PgWireError::ApiError(e.into()))?;
 
@@ -137,11 +147,12 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
     async fn do_describe_statement<C>(
         &self, _client: &mut C, stmt: &StoredStatement<Self::Statement>,
     ) -> PgWireResult<DescribeStatementResponse> {
-        debug!("describe statement: {}", stmt.statement);
+        let plan = &stmt.statement;
+        debug!("describe statement plan: {}", plan.display());
 
         let plan = self
             .query_context
-            .statement_to_plan(stmt.statement.clone())
+            .execute_logical_plan(plan.clone())
             .await
             .map_err(|e| {
                 PgWireError::UserError(Box::new(ErrorInfo::new(
@@ -164,11 +175,12 @@ impl ExtendedQueryHandler for ExtendedPostgresBackend {
     async fn do_describe_portal<C>(
         &self, _client: &mut C, portal: &Portal<Self::Statement>,
     ) -> PgWireResult<DescribePortalResponse> {
-        debug!("describe portal: {}", portal.statement.statement);
+        let plan = &portal.statement.statement;
+        debug!("describe portal plan: {}", plan.display());
 
         let plan = self
             .query_context
-            .statement_to_plan(portal.statement.statement.clone())
+            .execute_logical_plan(plan.clone())
             .await
             .map_err(|e| {
                 PgWireError::UserError(Box::new(ErrorInfo::new(
