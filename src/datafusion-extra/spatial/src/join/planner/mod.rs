@@ -1,6 +1,7 @@
 mod logical_plan_node;
 mod optimizer;
 mod physical_planner;
+mod probe_shuffle_exec;
 mod spatial_expr_utils;
 
 use datafusion::execution::SessionStateBuilder;

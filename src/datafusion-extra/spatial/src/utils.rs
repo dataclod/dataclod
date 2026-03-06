@@ -88,9 +88,9 @@ pub fn parse_distance_predicate(expr: &Arc<dyn PhysicalExpr>) -> Option<ParsedDi
             let args = st_distance_expr.args();
             assert!(args.len() >= 2);
             Some(ParsedDistancePredicate {
-                arg0: Arc::clone(&args[0]),
-                arg1: Arc::clone(&args[1]),
-                arg_distance: Arc::clone(distance_bound_expr),
+                arg0: args[0].clone(),
+                arg1: args[1].clone(),
+                arg_distance: distance_bound_expr.clone(),
             })
         } else {
             None
@@ -103,9 +103,9 @@ pub fn parse_distance_predicate(expr: &Arc<dyn PhysicalExpr>) -> Option<ParsedDi
         let args = st_dwithin_expr.args();
         assert!(args.len() >= 3);
         Some(ParsedDistancePredicate {
-            arg0: Arc::clone(&args[0]),
-            arg1: Arc::clone(&args[1]),
-            arg_distance: Arc::clone(&args[2]),
+            arg0: args[0].clone(),
+            arg1: args[1].clone(),
+            arg_distance: args[2].clone(),
         })
     } else {
         None

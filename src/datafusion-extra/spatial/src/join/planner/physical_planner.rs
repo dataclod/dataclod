@@ -18,6 +18,7 @@ use datafusion::physical_planner::{DefaultPhysicalPlanner, ExtensionPlanner, Phy
 
 use crate::join::exec::SpatialJoinExec;
 use crate::join::planner::logical_plan_node::SpatialJoinPlanNode;
+use crate::join::planner::probe_shuffle_exec::ProbeShuffleExec;
 use crate::join::planner::spatial_expr_utils::{
     is_spatial_predicate_supported, transform_join_filter,
 };
@@ -286,11 +287,7 @@ fn repartition_probe_side(
         }
     };
 
-    let num_partitions = probe_plan.output_partitioning().partition_count();
-    *probe_plan = Arc::new(RepartitionExec::try_new(
-        probe_plan.clone(),
-        Partitioning::RoundRobinBatch(num_partitions),
-    )?);
+    *probe_plan = Arc::new(ProbeShuffleExec::try_new(probe_plan.clone())?);
 
     Ok((physical_left, physical_right))
 }
