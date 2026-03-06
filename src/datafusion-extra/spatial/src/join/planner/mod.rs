@@ -15,6 +15,7 @@ use datafusion::execution::SessionStateBuilder;
 /// conditions (e.g. contain a spatial predicate as a join condition) are
 /// executed using the `SpatialJoinExec`.
 pub fn register_planner(state_builder: SessionStateBuilder) -> SessionStateBuilder {
+    tg_geom::init_mimalloc();
     // Enable the logical rewrite that turns Filter(CrossJoin) into Join(filter=...)
     let state_builder = optimizer::register_spatial_join_logical_optimizer(state_builder);
 

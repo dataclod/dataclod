@@ -1,3 +1,4 @@
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -5,10 +6,13 @@ use datafusion::config::Dialect;
 use datafusion::dataframe::DataFrame;
 use datafusion::execution::SessionStateBuilder;
 use datafusion::execution::context::{SessionConfig, SessionContext};
+use datafusion::execution::memory_pool::TrackConsumersPool;
+use datafusion::execution::runtime_env::RuntimeEnvBuilder;
 use datafusion::logical_expr::{LogicalPlan, LogicalPlanBuilder, Statement};
 use datafusion::sql::parser::Statement as SqlStatement;
 use parking_lot::RwLock;
 
+use crate::memory_pool::{DEFAULT_UNSPILLABLE_RESERVE_RATIO, QueryFairSpillPool};
 use crate::rewrite::StatementRewrite;
 use crate::state::QueryState;
 
@@ -30,18 +34,34 @@ impl QueryContext {
             "datafusion.execution.skip_physical_aggregate_schema_check",
             true,
         );
+        let config = datafusion_spatial::add_dataclod_option_extension(config);
+
+        let track_capacity = NonZeroUsize::new(10).expect("track capacity must be non-zero");
+        let memory_pool = Arc::new(TrackConsumersPool::new(
+            QueryFairSpillPool::new(8 * 1024 * 1024 * 1024, DEFAULT_UNSPILLABLE_RESERVE_RATIO),
+            track_capacity,
+        ));
+        let runtime_builder = RuntimeEnvBuilder::new().with_memory_pool(memory_pool);
+        let runtime = runtime_builder
+            .build_arc()
+            .expect("Failed to build datafusion runtime");
+
         let state_builder = SessionStateBuilder::new()
             .with_config(config)
+            .with_runtime_env(runtime)
             .with_default_features();
         let state_builder = datafusion_spatial::register_planner(state_builder);
         let state = state_builder.build();
+
         let ctx = SessionContext::new_with_state(state);
         datafusion_catalog_extra::with_pg_catalog(&ctx).expect("Failed to register pg_catalog");
         datafusion_sqlbuiltin::register_udf(&ctx);
         datafusion_spatial::register_spatial_udfs(&ctx);
         crate::expr::register_udtf(&ctx);
+
         let state = Arc::new(RwLock::new(QueryState::new()));
         let mut ctx = Self { inner: ctx, state };
+
         crate::rewrite::register_postgres_stmt_rewrites(&mut ctx);
         ctx
     }
