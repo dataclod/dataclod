@@ -15,9 +15,7 @@ use crate::geometry::bounding_box::BoundingBox;
 use crate::join::index::build_side_collector::{
     BuildPartition, BuildSideBatchesCollector, CollectBuildSideMetrics,
 };
-use crate::join::index::memory_plan::{
-    self, MemoryPlan, PartitionMemorySummary, compute_memory_plan,
-};
+use crate::join::index::memory_plan::{MemoryPlan, PartitionMemorySummary, compute_memory_plan};
 use crate::join::index::partitioned_index_provider::PartitionedIndexProvider;
 use crate::join::index::spatial_index_builder::SpatialJoinBuildMetrics;
 use crate::join::partitioning::flat::FlatPartitioner;

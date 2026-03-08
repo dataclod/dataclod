@@ -66,10 +66,6 @@ impl<E: Evaluator> EvaluateOperandBatchStream<E> {
 }
 
 impl<E: Evaluator> EvaluatedBatchStream for EvaluateOperandBatchStream<E> {
-    fn is_external(&self) -> bool {
-        false
-    }
-
     fn schema(&self) -> SchemaRef {
         self.inner.schema()
     }

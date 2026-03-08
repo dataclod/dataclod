@@ -11,7 +11,7 @@ use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 use pgwire::messages::response::ErrorResponse;
 use pgwire::messages::startup::Authentication;
 use pgwire::messages::{PgWireBackendMessage, PgWireFrontendMessage};
-use rand::{Rng, RngExt};
+use rand::RngExt;
 use tokio::sync::Mutex;
 
 const PG_VERSION: &str = "10.0";

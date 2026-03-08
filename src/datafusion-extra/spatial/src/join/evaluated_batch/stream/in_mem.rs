@@ -23,10 +23,6 @@ impl InMemoryEvaluatedBatchStream {
 }
 
 impl EvaluatedBatchStream for InMemoryEvaluatedBatchStream {
-    fn is_external(&self) -> bool {
-        false
-    }
-
     fn schema(&self) -> SchemaRef {
         self.schema.clone()
     }

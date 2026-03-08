@@ -117,14 +117,6 @@ impl SpilledPartitions {
         self.slots
     }
 
-    /// Count of spill files that were actually materialized.
-    pub fn spill_file_count(&self) -> usize {
-        self.partitions
-            .iter()
-            .map(|partition| partition.as_ref().map_or(0, |p| p.spill_files().len()))
-            .sum()
-    }
-
     /// Retrieve the spilled partition for a given spatial partition.
     pub fn spilled_partition(&self, partition: SpatialPartition) -> Result<&SpilledPartition> {
         let Some(slot) = self.slots.slot(partition) else {

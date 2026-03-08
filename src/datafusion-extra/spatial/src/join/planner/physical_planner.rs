@@ -4,16 +4,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use datafusion::arrow::datatypes::Schema;
-use datafusion::common::{DFSchema, JoinSide, Result, exec_err, plan_err};
+use datafusion::common::{DFSchema, Result, exec_err, plan_err};
 use datafusion::execution::context::QueryPlanner;
 use datafusion::execution::session_state::{SessionState, SessionStateBuilder};
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::logical_expr::logical_plan::UserDefinedLogicalNode;
 use datafusion::physical_expr::create_physical_expr;
+use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_plan::joins::NestedLoopJoinExec;
 use datafusion::physical_plan::joins::utils::JoinFilter;
-use datafusion::physical_plan::repartition::RepartitionExec;
-use datafusion::physical_plan::{ExecutionPlan, ExecutionPlanProperties, Partitioning};
 use datafusion::physical_planner::{DefaultPhysicalPlanner, ExtensionPlanner, PhysicalPlanner};
 
 use crate::join::exec::SpatialJoinExec;
@@ -22,7 +21,6 @@ use crate::join::planner::probe_shuffle_exec::ProbeShuffleExec;
 use crate::join::planner::spatial_expr_utils::{
     is_spatial_predicate_supported, transform_join_filter,
 };
-use crate::join::spatial_predicate::SpatialPredicate;
 use crate::option::DataClodOptions;
 
 /// Registers a query planner that can produce [`SpatialJoinExec`] from a
@@ -138,12 +136,7 @@ impl ExtensionPlanner for SpatialJoinExtensionPlanner {
         // swap_inputs() will then carry the RepartitionExec to the correct
         // child position.
         let (physical_left, physical_right) = if ext.spatial_join.repartition_probe_side {
-            repartition_probe_side(
-                physical_left,
-                physical_right,
-                &spatial_predicate,
-                should_swap,
-            )?
+            repartition_probe_side(physical_left, physical_right, should_swap)?
         } else {
             (physical_left, physical_right)
         };
@@ -274,7 +267,7 @@ fn logical_join_filter_to_physical(
 /// after `SpatialJoinExec` is constructed.
 fn repartition_probe_side(
     mut physical_left: Arc<dyn ExecutionPlan>, mut physical_right: Arc<dyn ExecutionPlan>,
-    spatial_predicate: &SpatialPredicate, should_swap: bool,
+    should_swap: bool,
 ) -> Result<(Arc<dyn ExecutionPlan>, Arc<dyn ExecutionPlan>)> {
     let probe_plan = {
         // For Relation/Distance predicates, probe is always Right after swap.

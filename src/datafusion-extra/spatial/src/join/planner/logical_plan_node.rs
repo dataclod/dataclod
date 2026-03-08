@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 use std::fmt;
-use std::sync::Arc;
 
 use datafusion::common::{DFSchemaRef, NullEquality, Result, exec_err};
 use datafusion::logical_expr::logical_plan::UserDefinedLogicalNodeCore;

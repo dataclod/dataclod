@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use datafusion::arrow::datatypes::Schema;
 use datafusion::common::tree_node::{Transformed, TreeNode};
-use datafusion::common::{HashMap, JoinSide, Result, ScalarValue};
+use datafusion::common::{HashMap, JoinSide, Result};
 use datafusion::logical_expr::{Expr, Operator};
-use datafusion::physical_expr::expressions::{BinaryExpr, Column, Literal};
+use datafusion::physical_expr::expressions::{BinaryExpr, Column};
 use datafusion::physical_expr::{PhysicalExpr, ScalarFunctionExpr};
 use datafusion::physical_plan::joins::utils::{ColumnIndex, JoinFilter};
 
@@ -340,30 +340,6 @@ fn reproject_column_references_for_side(
         .collect();
 
     reproject_column_references(expr, &index_mapping)
-}
-
-/// Extract a literal u32 value from an expression.
-/// Returns None if the expression is not a literal integer or if it's out of
-/// u32 range.
-fn extract_literal_u32(expr: &Arc<dyn PhysicalExpr>) -> Option<u32> {
-    let literal = expr.as_any().downcast_ref::<Literal>()?;
-    match literal.value() {
-        ScalarValue::UInt32(Some(val)) => Some(*val),
-        ScalarValue::Int32(Some(val)) if *val >= 0 => Some(*val as u32),
-        ScalarValue::Int64(Some(val)) if *val >= 0 && *val <= u32::MAX as i64 => Some(*val as u32),
-        ScalarValue::UInt64(Some(val)) if *val <= u32::MAX as u64 => Some(*val as u32),
-        _ => None,
-    }
-}
-
-/// Extract a literal boolean value from an expression.
-/// Returns None if the expression is not a literal boolean.
-fn extract_literal_bool(expr: &Arc<dyn PhysicalExpr>) -> Option<bool> {
-    let literal = expr.as_any().downcast_ref::<Literal>()?;
-    match literal.value() {
-        ScalarValue::Boolean(Some(val)) => Some(*val),
-        _ => None,
-    }
 }
 
 /// Replace the join filter expression with a new expression. The replaced join

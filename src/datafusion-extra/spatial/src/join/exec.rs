@@ -4,11 +4,8 @@ use std::sync::Arc;
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::common::{JoinSide, JoinType, Result, project_schema};
 use datafusion::execution::{SendableRecordBatchStream, TaskContext};
-use datafusion::logical_expr::Operator;
 use datafusion::physical_expr::equivalence::{ProjectionMapping, join_equivalence_properties};
 use datafusion::physical_plan::common::can_project;
-use datafusion::physical_plan::execution_plan::EmissionType;
-use datafusion::physical_plan::expressions::{BinaryExpr, Column};
 use datafusion::physical_plan::joins::utils::{
     ColumnIndex, JoinFilter, build_join_schema, check_join_is_valid, reorder_output_after_swap,
     swap_join_projection,
@@ -18,25 +15,19 @@ use datafusion::physical_plan::projection::{
     EmbeddedProjection, ProjectionExec, try_embed_projection,
 };
 use datafusion::physical_plan::{
-    DisplayAs, DisplayFormatType, ExecutionPlan, ExecutionPlanProperties, Partitioning,
-    PhysicalExpr, PlanProperties,
+    DisplayAs, DisplayFormatType, ExecutionPlan, ExecutionPlanProperties, PlanProperties,
 };
 use parking_lot::Mutex;
 
-use crate::join::index::spatial_index::SpatialIndex;
-use crate::join::index::spatial_index_builder::SpatialJoinBuildMetrics;
 use crate::join::prepare::{SpatialJoinComponents, SpatialJoinComponentsBuilder};
 use crate::join::spatial_predicate::{SpatialPredicate, SpatialPredicateTrait};
-use crate::join::stream::{SpatialJoinProbeMetrics, SpatialJoinStream};
+use crate::join::stream::SpatialJoinStream;
 use crate::join::utils::join_utils::{
     JoinPushdownData, asymmetric_join_output_partitioning, boundedness_from_children,
     compute_join_emission_type, try_pushdown_through_join,
 };
 use crate::join::utils::once_fut::OnceAsync;
-use crate::option::{DataClodOptions, SpatialJoinOptions};
-
-/// Type alias for build and probe execution plans
-type BuildProbePlans<'a> = (&'a Arc<dyn ExecutionPlan>, &'a Arc<dyn ExecutionPlan>);
+use crate::option::SpatialJoinOptions;
 
 /// Physical execution plan for performing spatial joins between two tables. It
 /// uses a spatial index to speed up the join operation.
@@ -397,7 +388,7 @@ impl ExecutionPlan for SpatialJoinExec {
 
         // Determine build/probe plans based on predicate type.
         // For regular spatial joins, left is always build and right is always probe.
-        let (build_plan, probe_plan, probe_side) = (&self.left, &self.right, JoinSide::Right);
+        let (build_plan, probe_plan) = (&self.left, &self.right);
 
         // Determine which input index corresponds to the probe side for ordering checks
         let probe_input_index = 1;

@@ -31,12 +31,11 @@ use crate::join::probe::ProbeStreamMetrics;
 use crate::join::probe::partitioned_stream_provider::PartitionedProbeStreamProvider;
 use crate::join::spatial_predicate::SpatialPredicate;
 use crate::join::utils::join_utils::{
-    adjust_indices_by_join_type, adjust_indices_with_visited_info, apply_join_filter_to_indices,
-    build_batch_from_indices, get_final_indices_from_bit_map, need_probe_multi_partition_bitmap,
+    adjust_indices_with_visited_info, apply_join_filter_to_indices, build_batch_from_indices,
+    get_final_indices_from_bit_map, need_probe_multi_partition_bitmap,
     need_produce_result_in_final,
 };
 use crate::join::utils::once_fut::{OnceAsync, OnceFut};
-use crate::option::{DataClodOptions, SpatialJoinOptions};
 
 /// Stream for producing spatial join result batches.
 pub struct SpatialJoinStream {
@@ -62,8 +61,6 @@ pub struct SpatialJoinStream {
     state: SpatialJoinStreamState,
     /// `DataFusion` runtime environment
     runtime_env: Arc<RuntimeEnv>,
-    /// Options for the spatial join
-    options: SpatialJoinOptions,
     /// Target output batch size
     target_output_batch_size: usize,
     /// Once future for the shared partitioned index provider
@@ -82,8 +79,6 @@ pub struct SpatialJoinStream {
     pending_index_future: Option<BoxFuture<'static, Option<Result<Arc<SpatialIndex>>>>>,
     /// Total number of regular partitions produced by the provider
     num_regular_partitions: Option<u32>,
-    /// The spatial predicate being evaluated
-    spatial_predicate: SpatialPredicate,
     /// Bitmap for tracking visited rows in the Multi partition of the probe
     /// side. This is used for outer joins to ensure that we only emit
     /// unmatched rows from the Multi partition once, after all regular
@@ -111,12 +106,6 @@ impl SpatialJoinStream {
         once_async_spatial_join_components: Arc<Mutex<Option<OnceAsync<SpatialJoinComponents>>>>,
     ) -> Self {
         let target_output_batch_size = session_config.batch_size();
-        let dataclod_options = session_config
-            .options()
-            .extensions
-            .get::<DataClodOptions>()
-            .cloned()
-            .unwrap_or_default();
 
         let evaluator = create_operand_evaluator(on);
         let join_metrics = SpatialJoinProbeMetrics::new(probe_partition_id, metrics);
@@ -139,7 +128,6 @@ impl SpatialJoinStream {
             join_metrics,
             state: SpatialJoinStreamState::WaitPrepareSpatialJoinComponents,
             runtime_env,
-            options: dataclod_options.spatial_join,
             target_output_batch_size,
             once_fut_spatial_join_components,
             once_async_spatial_join_components,
@@ -149,7 +137,6 @@ impl SpatialJoinStream {
             probe_evaluated_stream: None,
             pending_index_future: None,
             num_regular_partitions: None,
-            spatial_predicate: on.clone(),
             visited_multi_probe_side: None,
             probe_offset: 0,
         }
@@ -771,8 +758,6 @@ impl SpatialJoinStream {
             join_metrics: self.join_metrics.clone(),
             max_batch_size: self.target_output_batch_size,
             probe_side_ordered: self.probe_side_ordered,
-            spatial_predicate: self.spatial_predicate.clone(),
-            options: self.options.clone(),
             visited_probe_side,
             probe_offset,
             produce_unmatched_probe_rows: is_last_build_partition,
@@ -834,10 +819,6 @@ pub struct SpatialJoinBatchIterator {
     max_batch_size: usize,
     /// Maintains the order of the probe side
     probe_side_ordered: bool,
-    /// The spatial predicate being evaluated
-    spatial_predicate: SpatialPredicate,
-    /// The spatial join options
-    options: SpatialJoinOptions,
     /// Bitmap for tracking visited rows in the probe side. This will only be
     /// `Some` when processing the Multi partition for spatial-partitioned
     /// right outer joins.
@@ -978,10 +959,6 @@ pub struct SpatialJoinBatchIteratorParams {
     pub max_batch_size: usize,
     /// Whether to preserve probe-side row ordering when producing output.
     pub probe_side_ordered: bool,
-    /// Spatial predicate used to query the index.
-    pub spatial_predicate: SpatialPredicate,
-    /// Spatial join options affecting behavior(execution mode, etc.).
-    pub options: SpatialJoinOptions,
     /// Optional visited bitmap for multi-partition probe side outer join
     /// bookkeeping.
     pub visited_probe_side: Option<Arc<Mutex<BooleanBufferBuilder>>>,
@@ -1005,8 +982,6 @@ impl SpatialJoinBatchIterator {
             join_metrics: params.join_metrics,
             max_batch_size: params.max_batch_size,
             probe_side_ordered: params.probe_side_ordered,
-            spatial_predicate: params.spatial_predicate,
-            options: params.options,
             visited_probe_side: params.visited_probe_side,
             offset_in_partition: params.probe_offset,
             produce_unmatched_probe_rows: params.produce_unmatched_probe_rows,

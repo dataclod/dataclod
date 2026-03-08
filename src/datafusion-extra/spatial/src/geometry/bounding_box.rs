@@ -61,27 +61,6 @@ impl BoundingBox {
         self.x.intersects_interval(&other.x) && self.y.intersects_interval(&other.y)
     }
 
-    /// Calculate whether this bounding box contains another `BoundingBox`
-    ///
-    /// Returns true if this bounding box contains other or false otherwise.
-    /// This method will consider Z and M dimension if and only if those
-    /// dimensions are present in both bounding boxes.
-    pub fn contains(&self, other: &Self) -> bool {
-        self.x.contains_interval(&other.x) && self.y.contains_interval(&other.y)
-    }
-
-    /// Expand this `BoundingBox` by a given distance in x and y dimensions only
-    ///
-    /// Returns a new `BoundingBox` where x and y intervals are expanded by the
-    /// given distance. The x dimension (which may wrap around) is handled
-    /// correctly. Z and M dimensions are left unchanged.
-    pub fn expand_by(&self, distance: f64) -> Self {
-        Self {
-            x: self.x.expand_by(distance),
-            y: self.y.expand_by(distance),
-        }
-    }
-
     /// Update this `BoundingBox` to include the bounds of another
     ///
     /// This method will propagate missingness of Z or M dimensions from the two

@@ -20,9 +20,9 @@
 use std::{ops::Range, sync::Arc};
 
 use datafusion::arrow::array::{
-    Array, ArrowPrimitiveType, BooleanBufferBuilder, Float64Array, NativeAdapter, PrimitiveArray,
-    RecordBatch, RecordBatchOptions, UInt32Array, UInt32Builder, UInt64Array, UInt64Builder,
-    downcast_array, new_null_array,
+    Array, ArrowPrimitiveType, BooleanBufferBuilder, NativeAdapter, PrimitiveArray, RecordBatch,
+    RecordBatchOptions, UInt32Array, UInt32Builder, UInt64Array, UInt64Builder, downcast_array,
+    new_null_array,
 };
 use datafusion::arrow::buffer::NullBuffer;
 use datafusion::arrow::compute::{self, take};

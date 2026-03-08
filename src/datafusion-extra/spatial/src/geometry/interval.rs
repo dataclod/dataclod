@@ -45,12 +45,6 @@ pub trait IntervalTrait: std::fmt::Debug + PartialEq + Sized {
     /// required.
     fn is_wraparound(&self) -> bool;
 
-    /// Check for potential intersection with a value
-    ///
-    /// Note that intervals always contain their endpoints (for both the
-    /// wraparound and non-wraparound case).
-    fn intersects_value(&self, value: f64) -> bool;
-
     /// Check for potential intersection with an interval
     ///
     /// Note that intervals always contain their endpoints (for both the
@@ -60,16 +54,6 @@ pub trait IntervalTrait: std::fmt::Debug + PartialEq + Sized {
     /// checking of `is_wraparound()` when not required for an
     /// implementation.
     fn intersects_interval(&self, other: &Self) -> bool;
-
-    /// Check for potential containment of an interval
-    ///
-    /// Note that intervals always contain their endpoints (for both the
-    /// wraparound and non-wraparound case).
-    ///
-    /// This method accepts Self for performance reasons to prevent unnecessary
-    /// checking of `is_wraparound()` when not required for an
-    /// implementation.
-    fn contains_interval(&self, other: &Self) -> bool;
 
     /// The width of the interval
     ///
@@ -87,27 +71,11 @@ pub trait IntervalTrait: std::fmt::Debug + PartialEq + Sized {
     /// True if this interval is empty (i.e. intersects no values)
     fn is_empty(&self) -> bool;
 
-    /// True if this interval is full (i.e. intersects all values)
-    fn is_full(&self) -> bool;
-
     /// Compute a new interval that is the union of both
     ///
     /// When accumulating intervals in a loop, use
     /// [`Interval::update_interval`].
     fn merge_interval(&self, other: &Self) -> Self;
-
-    /// Compute a new interval that is the union of both
-    ///
-    /// When accumulating intervals in a loop, use [`Interval::update_value`].
-    fn merge_value(&self, other: f64) -> Self;
-
-    /// Expand this interval by a given distance
-    ///
-    /// Returns a new interval where both endpoints are moved outward by the
-    /// given distance. For regular intervals, this expands both lo and hi
-    /// by the distance. For wraparound intervals, this may result in the
-    /// full interval if expansion is large enough.
-    fn expand_by(&self, distance: f64) -> Self;
 
     /// Compute the interval contained by both self and other
     fn intersection(&self, other: &Self) -> Result<Self>;
@@ -210,16 +178,8 @@ impl IntervalTrait for Interval {
         false
     }
 
-    fn intersects_value(&self, value: f64) -> bool {
-        value >= self.lo && value <= self.hi
-    }
-
     fn intersects_interval(&self, other: &Self) -> bool {
         self.lo <= other.hi && other.lo <= self.hi
-    }
-
-    fn contains_interval(&self, other: &Self) -> bool {
-        self.lo <= other.lo && self.hi >= other.hi
     }
 
     fn width(&self) -> f64 {
@@ -234,28 +194,10 @@ impl IntervalTrait for Interval {
         self.width() == -f64::INFINITY
     }
 
-    fn is_full(&self) -> bool {
-        self == &Self::full()
-    }
-
     fn merge_interval(&self, other: &Self) -> Self {
         let mut out = *self;
         out.update_interval(other);
         out
-    }
-
-    fn merge_value(&self, other: f64) -> Self {
-        let mut out = *self;
-        out.update_value(other);
-        out
-    }
-
-    fn expand_by(&self, distance: f64) -> Self {
-        if self.is_empty() || distance.is_nan() || distance < 0.0 {
-            return *self;
-        }
-
-        Self::new(self.lo - distance, self.hi + distance)
     }
 
     fn intersection(&self, other: &Self) -> Result<Self> {
@@ -342,11 +284,6 @@ impl IntervalTrait for WraparoundInterval {
         !self.is_empty() && self.inner.width() < 0.0
     }
 
-    fn intersects_value(&self, value: f64) -> bool {
-        let (left, right) = self.split();
-        left.intersects_value(value) || right.intersects_value(value)
-    }
-
     fn intersects_interval(&self, other: &Self) -> bool {
         let (left, right) = self.split();
         let (other_left, other_right) = other.split();
@@ -354,12 +291,6 @@ impl IntervalTrait for WraparoundInterval {
             || left.intersects_interval(&other_right)
             || right.intersects_interval(&other_left)
             || right.intersects_interval(&other_right)
-    }
-
-    fn contains_interval(&self, other: &Self) -> bool {
-        let (left, right) = self.split();
-        let (other_left, other_right) = other.split();
-        left.contains_interval(&other_left) && right.contains_interval(&other_right)
     }
 
     fn width(&self) -> f64 {
@@ -380,10 +311,6 @@ impl IntervalTrait for WraparoundInterval {
 
     fn is_empty(&self) -> bool {
         self.inner.is_empty()
-    }
-
-    fn is_full(&self) -> bool {
-        self == &Self::full()
     }
 
     fn merge_interval(&self, other: &Self) -> Self {
@@ -441,69 +368,6 @@ impl IntervalTrait for WraparoundInterval {
         } else {
             WraparoundInterval::new(new_right.lo(), new_left.hi())
         }
-    }
-
-    fn merge_value(&self, value: f64) -> Self {
-        if self.intersects_value(value) || value.is_nan() {
-            return *self;
-        }
-
-        if !self.is_wraparound() {
-            return Self {
-                inner: self.inner.merge_value(value),
-            };
-        }
-
-        // Move only one of the endpoints
-        let distance_left = value - self.inner.hi;
-        let distance_right = self.inner.lo - value;
-        debug_assert!(distance_left > 0.0);
-        debug_assert!(distance_right > 0.0);
-        if distance_left < distance_right {
-            Self {
-                inner: Interval {
-                    lo: self.inner.lo,
-                    hi: value,
-                },
-            }
-        } else {
-            Self {
-                inner: Interval {
-                    lo: value,
-                    hi: self.inner.hi,
-                },
-            }
-        }
-    }
-
-    fn expand_by(&self, distance: f64) -> Self {
-        if self.is_empty() || distance.is_nan() || distance < 0.0 {
-            return *self;
-        }
-
-        if !self.is_wraparound() {
-            // For non-wraparound, just expand the inner interval
-            return Self {
-                inner: self.inner.expand_by(distance),
-            };
-        }
-
-        // For wraparound intervals, expanding means including more values
-        // Wraparound interval (a, b) where a > b excludes the region (b, a)
-        // To expand by distance d, we shrink the excluded region from (b, a) to (b+d,
-        // a-d) This means the new wraparound interval becomes (a-d, b+d)
-        let excluded_lo = self.inner.hi + distance; // b + d
-        let excluded_hi = self.inner.lo - distance; // a - d
-
-        // If the excluded region disappears (excluded_lo >= excluded_hi), we get the
-        // full interval
-        if excluded_lo >= excluded_hi {
-            return Self::full();
-        }
-
-        // The new wraparound interval excludes (excluded_lo, excluded_hi)
-        // So the interval itself is (excluded_hi, excluded_lo)
-        Self::new(excluded_hi, excluded_lo)
     }
 
     fn intersection(&self, other: &Self) -> Result<Self> {

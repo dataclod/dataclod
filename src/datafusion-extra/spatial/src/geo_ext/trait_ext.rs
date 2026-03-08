@@ -3,6 +3,7 @@ use geo_types::{Coord, LineString, MultiLineString, MultiPolygon, Point, Polygon
 
 pub trait GeoExt {
     fn st_simplifyvw(&self, concavity: f64) -> Option<Geometry>;
+    #[allow(dead_code)]
     fn st_geodesic_segmentize(&self, max_distance: f64) -> Option<Geometry>;
 }
 

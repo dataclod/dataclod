@@ -87,10 +87,6 @@ impl ExternalEvaluatedBatchStream {
 }
 
 impl EvaluatedBatchStream for ExternalEvaluatedBatchStream {
-    fn is_external(&self) -> bool {
-        true
-    }
-
     fn schema(&self) -> SchemaRef {
         self.schema.clone()
     }

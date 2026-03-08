@@ -39,10 +39,6 @@ impl Stream for NonPartitionedStream {
 }
 
 impl EvaluatedBatchStream for NonPartitionedStream {
-    fn is_external(&self) -> bool {
-        self.inner.as_ref().get_ref().is_external()
-    }
-
     fn schema(&self) -> SchemaRef {
         self.inner.schema()
     }

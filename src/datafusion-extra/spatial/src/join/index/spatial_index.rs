@@ -7,10 +7,8 @@ use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::common::runtime::JoinSet;
 use datafusion::common::{Result, exec_err};
 use datafusion::error::DataFusionError;
-use datafusion::execution::memory_pool::MemoryReservation;
 use geo_index::rtree::sort::HilbertSort;
 use geo_index::rtree::{RTree, RTreeBuilder, RTreeIndex};
-use geo_types::Rect;
 use parking_lot::Mutex;
 use wkb::reader::Wkb;
 
@@ -103,51 +101,6 @@ impl SpatialIndex {
     /// Get the batch at the given index.
     pub fn get_indexed_batch(&self, batch_idx: usize) -> &RecordBatch {
         &self.indexed_batches[batch_idx].batch
-    }
-
-    /// Query the spatial index with a probe geometry to find matching
-    /// build-side geometries.
-    ///
-    /// This method implements a two-phase spatial join query:
-    /// 1. **Filter phase**: Uses the R-tree index with the probe geometry's
-    ///    bounding rectangle to quickly identify candidate geometries that
-    ///    might satisfy the spatial predicate
-    /// 2. **Refinement phase**: Evaluates the exact spatial predicate on
-    ///    candidates to determine actual matches
-    ///
-    /// # Arguments
-    /// * `probe_wkb` - The probe geometry in WKB format
-    /// * `probe_rect` - The minimum bounding rectangle of the probe geometry
-    /// * `distance` - Optional distance parameter for distance-based spatial
-    ///   predicates
-    /// * `build_batch_positions` - Output vector that will be populated with
-    ///   (`batch_idx`, `row_idx`) pairs for each matching build-side geometry
-    ///
-    /// # Returns
-    /// * `JoinResultMetrics` containing the number of actual matches (`count`)
-    ///   and the number of candidates from the filter phase (`candidate_count`)
-    pub fn query(
-        &self, probe_wkb: &Wkb, probe_rect: &Rect<f32>, distance: &Option<f64>,
-        build_batch_positions: &mut Vec<(i32, i32)>,
-    ) -> Result<QueryResultMetrics> {
-        let min = probe_rect.min();
-        let max = probe_rect.max();
-        let mut candidates = self.rtree.search(min.x, min.y, max.x, max.y);
-        if candidates.is_empty() {
-            return Ok(QueryResultMetrics {
-                count: 0,
-                candidate_count: 0,
-            });
-        }
-
-        // Sort and dedup candidates to avoid duplicate results when we index one
-        // geometry using several boxes.
-        candidates.sort_unstable();
-        candidates.dedup();
-
-        // Refine the candidates retrieved from the r-tree index by evaluating the
-        // actual spatial predicate
-        self.refine(probe_wkb, &candidates, distance, build_batch_positions)
     }
 
     /// Query the spatial index with a batch of probe geometries to find

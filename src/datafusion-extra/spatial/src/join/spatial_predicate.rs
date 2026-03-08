@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use datafusion::common::{JoinSide, Result, exec_err};
+use datafusion::common::{JoinSide, Result};
 use datafusion::physical_expr::PhysicalExpr;
 use datafusion::physical_plan::projection::{ProjectionExpr, update_expr};
 

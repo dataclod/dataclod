@@ -86,10 +86,6 @@ impl<C: FirstPassStreamCallback> FirstPassStream<C> {
 }
 
 impl<C: FirstPassStreamCallback + Unpin> EvaluatedBatchStream for FirstPassStream<C> {
-    fn is_external(&self) -> bool {
-        false
-    }
-
     fn schema(&self) -> SchemaRef {
         self.source.schema()
     }

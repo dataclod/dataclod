@@ -1,11 +1,9 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
 use datafusion::arrow::array::BooleanBufferBuilder;
 use datafusion::arrow::datatypes::SchemaRef;
 use datafusion::common::utils::proxy::VecAllocExt;
 use datafusion::common::{JoinType, Result};
-use datafusion::execution::memory_pool::{MemoryConsumer, MemoryPool, MemoryReservation};
 use datafusion::physical_plan::metrics::{self, ExecutionPlanMetricsSet, MetricBuilder};
 use futures::StreamExt;
 use geo_index::rtree::sort::HilbertSort;
@@ -14,7 +12,6 @@ use parking_lot::Mutex;
 
 use crate::join::evaluated_batch::EvaluatedBatch;
 use crate::join::evaluated_batch::stream::SendableEvaluatedBatchStream;
-use crate::join::index::build_side_collector::BuildPartition;
 use crate::join::index::spatial_index::SpatialIndex;
 use crate::join::operand_evaluator::create_operand_evaluator;
 use crate::join::refine::create_refiner;

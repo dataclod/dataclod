@@ -148,12 +148,6 @@ impl EvaluatedBatchSpillReader {
         self.inner.schema()
     }
 
-    /// Read the next `EvaluatedBatch` from the spill file
-    pub fn next_batch(&mut self) -> Option<Result<EvaluatedBatch>> {
-        self.next_raw_batch()
-            .map(|record_batch| record_batch.and_then(spilled_batch_to_evaluated_batch))
-    }
-
     /// Read the next raw `RecordBatch` from the spill file
     pub fn next_raw_batch(&mut self) -> Option<Result<RecordBatch>> {
         self.inner.next_batch()
@@ -188,9 +182,6 @@ pub fn spilled_batch_to_evaluated_batch(record_batch: RecordBatch) -> Result<Eva
 
     // Extract the geometry array (column 1)
     let geom_array = record_batch.column(SPILL_FIELD_GEOM_INDEX).clone();
-
-    let schema = record_batch.schema();
-    let geom_field = schema.field(SPILL_FIELD_GEOM_INDEX);
 
     // Extract the distance array (column 3) and convert back to ColumnarValue
     let dist_array = record_batch

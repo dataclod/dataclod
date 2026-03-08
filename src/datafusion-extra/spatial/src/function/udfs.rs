@@ -3,7 +3,7 @@ use geos::{CoordSeq, Geom, Geometry};
 use geozero::wkb::Ewkb;
 use geozero::{CoordDimensions, ToGeo, ToWkb};
 use lwgeom::LWGeom;
-use tg_geom::{Geom as TgGeom, GeomType};
+use tg_geom::Geom as TgGeom;
 
 use crate::geo_ext::GeoExt;
 use crate::geos_ext::GeosExt;

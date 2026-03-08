@@ -353,13 +353,6 @@ impl ArgType {
         }
     }
 
-    pub fn is_timestamp(&self) -> bool {
-        matches!(
-            self,
-            ArgType::Timestamp | ArgType::TimestampMs | ArgType::TimestampS | ArgType::TimestampNs
-        )
-    }
-
     pub fn to_scalar_tokens(&self, result_expr: TokenStream) -> TokenStream {
         match self {
             ArgType::Timestamp

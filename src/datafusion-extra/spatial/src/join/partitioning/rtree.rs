@@ -62,19 +62,6 @@ impl RTreePartitioner {
             inner: Arc::new(inner),
         })
     }
-
-    /// Create a new `RTree` partitioner with a custom node size.
-    pub fn try_new_with_node_size(boundaries: Vec<BoundingBox>, node_size: u16) -> Result<Self> {
-        let inner = RawRTreePartitioner::build(boundaries, Some(node_size))?;
-        Ok(Self {
-            inner: Arc::new(inner),
-        })
-    }
-
-    /// Return the number of levels in the underlying `RTree`.
-    pub fn depth(&self) -> usize {
-        self.inner.depth()
-    }
 }
 
 impl SpatialPartitioner for RTreePartitioner {
@@ -151,10 +138,6 @@ impl RawRTreePartitioner {
 
     fn num_regular_partitions(&self) -> usize {
         self.num_partitions
-    }
-
-    fn depth(&self) -> usize {
-        self.rtree.num_levels()
     }
 
     fn partition(&self, bbox: &BoundingBox) -> Result<SpatialPartition> {
