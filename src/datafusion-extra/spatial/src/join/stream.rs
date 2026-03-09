@@ -385,12 +385,6 @@ impl SpatialJoinStream {
             return Poll::Ready(Ok(StatefulStreamResult::Continue));
         }
 
-        if num_partitions > 1 {
-            return Poll::Ready(exec_err!(
-                "Multi-partitioned spatial join is not supported yet"
-            ));
-        }
-
         self.state = SpatialJoinStreamState::WaitBuildIndex(0, true);
         Poll::Ready(Ok(StatefulStreamResult::Continue))
     }
