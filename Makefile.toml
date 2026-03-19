@@ -7,7 +7,7 @@ skip_crate_env_info = true
 [env]
 DATACLOD_CORE_PORT = 9973
 DATACLOD_PASSWORD = "dataclod"
-DATACLOD_LOG_LEVEL = "DEBUG"
+DATACLOD_LOG = "DEBUG"
 TOKIO_CONSOLE_BIND = "0.0.0.0:6669"
 IMAGE_TAG = { script = ["git rev-parse --short HEAD"] }
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true

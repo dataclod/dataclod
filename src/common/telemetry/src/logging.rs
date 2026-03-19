@@ -11,9 +11,9 @@ use tracing_subscriber::layer::SubscriberExt;
 pub fn init_logging() -> Vec<WorkerGuard> {
     let mut guards = Vec::new();
 
-    let (stdout_write, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
-    let log_level = std::env::var("DATACLOD_LOG_LEVEL").unwrap_or("INFO".to_owned());
+    let log_level = std::env::var("DATACLOD_LOG").unwrap_or("INFO".to_owned());
     let log_level = Level::from_str(log_level.as_str()).unwrap_or(Level::INFO);
+    let (stdout_write, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
     let stdout_layer = Layer::new()
         .with_writer(stdout_write.with_max_level(log_level))
         .with_file(true)
@@ -22,18 +22,23 @@ pub fn init_logging() -> Vec<WorkerGuard> {
         .with_target(false);
     guards.push(stdout_guard);
 
+    let log_dir = std::env::var("DATACLOD_LOG_DIR").unwrap_or("dataclod_log".to_owned());
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "run.log");
+    let (file_write, file_guard) = tracing_appender::non_blocking(file_appender);
+    let file_layer = Layer::new()
+        .with_writer(file_write.with_max_level(log_level))
+        .with_file(true)
+        .with_line_number(true)
+        .with_thread_ids(true)
+        .with_target(false)
+        .with_ansi(false);
+    guards.push(file_guard);
+
+    let subscriber = Registry::default().with(stdout_layer).with(file_layer);
     #[cfg(not(feature = "console"))]
-    {
-        let subscriber = Registry::default().with(stdout_layer);
-        tracing::subscriber::set_global_default(subscriber).unwrap();
-    }
+    tracing::subscriber::set_global_default(subscriber).unwrap();
     #[cfg(feature = "console")]
-    {
-        let subscriber = Registry::default()
-            .with(stdout_layer)
-            .with(console_subscriber::spawn());
-        tracing::subscriber::set_global_default(subscriber).unwrap();
-    }
+    tracing::subscriber::set_global_default(subscriber.with(console_subscriber::spawn())).unwrap();
 
     guards
 }
