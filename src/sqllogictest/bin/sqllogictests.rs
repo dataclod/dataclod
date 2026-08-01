@@ -187,7 +187,7 @@ async fn run_test_file(
     let pb = mp.add(ProgressBar::new(count));
 
     pb.set_style(mp_style);
-    pb.set_message(format!("{:?}", &relative_path));
+    pb.set_message(format!("{relative_path:?}"));
 
     let mut runner = sqllogictest::Runner::new(|| {
         async {
@@ -302,7 +302,7 @@ async fn run_complete_file(
     let pb = mp.add(ProgressBar::new(count));
 
     pb.set_style(mp_style);
-    pb.set_message(format!("{:?}", &relative_path));
+    pb.set_message(format!("{relative_path:?}"));
 
     let mut runner = sqllogictest::Runner::new(|| {
         async {

@@ -346,10 +346,7 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
                     return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
                         "ERROR".to_owned(),
                         "XX000".to_owned(),
-                        format!(
-                            "Unsupported List value Datatype {} and Array {:?}",
-                            value_type, &arr
-                        ),
+                        format!("Unsupported List value Datatype {value_type} and Array {arr:?}"),
                     ))));
                 }
             }
@@ -379,7 +376,7 @@ pub fn encode_value(encoder: &mut DataRowEncoder, arr: &ArrayRef, idx: usize) ->
             return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
                 "ERROR".to_owned(),
                 "XX000".to_owned(),
-                format!("Unsupported Datatype {} and Array {:?}", arr_type, &arr),
+                format!("Unsupported Datatype {arr_type} and Array {arr:?}"),
             ))));
         }
     }

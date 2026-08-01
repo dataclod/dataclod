@@ -69,7 +69,7 @@ pub struct SpatialJoinExec {
     column_indices: Vec<ColumnIndex>,
     /// Cache holding plan properties like equivalences, output partitioning
     /// etc.
-    cache: PlanProperties,
+    cache: Arc<PlanProperties>,
     /// Once future for creating the partitioned index provider shared by all
     /// probe partitions. This future runs only once before probing starts,
     /// and can be disposed by the last finished stream so the provider does
@@ -106,13 +106,13 @@ impl SpatialJoinExec {
         let (join_schema, column_indices) =
             build_join_schema(&left_schema, &right_schema, join_type);
         let join_schema = Arc::new(join_schema);
-        let cache = Self::compute_properties(
+        let cache = Arc::new(Self::compute_properties(
             &left,
             &right,
             join_schema.clone(),
             *join_type,
             projection.as_ref(),
-        )?;
+        )?);
 
         Ok(SpatialJoinExec {
             left,
@@ -157,7 +157,7 @@ impl SpatialJoinExec {
         let swapped_projection = swap_join_projection(
             left_schema.fields().len(),
             right_schema.fields().len(),
-            self.projection.as_ref(),
+            self.projection.as_deref(),
             &self.join_type,
         );
 
@@ -189,7 +189,7 @@ impl SpatialJoinExec {
 
     pub fn with_projection(&self, projection: Option<Vec<usize>>) -> Result<Self> {
         // check if the projection is valid
-        can_project(&self.schema(), projection.as_ref())?;
+        can_project(&self.schema(), projection.as_deref())?;
         let projection = match projection {
             Some(projection) => {
                 match &self.projection {
@@ -302,11 +302,7 @@ impl ExecutionPlan for SpatialJoinExec {
         "SpatialJoinExec"
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn properties(&self) -> &PlanProperties {
+    fn properties(&self) -> &Arc<PlanProperties> {
         &self.cache
     }
 

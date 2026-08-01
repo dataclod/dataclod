@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
@@ -29,10 +28,6 @@ struct TransformUdf {
 }
 
 impl ScalarUDFImpl for TransformUdf {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "ST_Transform"
     }

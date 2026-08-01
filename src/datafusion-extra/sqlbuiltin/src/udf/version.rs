@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::{Result as DFResult, ScalarValue};
 use datafusion::logical_expr::{
@@ -20,10 +18,6 @@ struct Version {
 }
 
 impl ScalarUDFImpl for Version {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "version"
     }

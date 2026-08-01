@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::sync::Arc;
 
 use datafusion::arrow::array::{ListBuilder, StringBuilder};
@@ -20,10 +19,6 @@ struct CurrentSchemas {
 }
 
 impl ScalarUDFImpl for CurrentSchemas {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "current_schemas"
     }

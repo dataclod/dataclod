@@ -109,7 +109,7 @@ pub fn transform_join_filter(
 fn extract_spatial_predicate(
     expr: &Arc<dyn PhysicalExpr>, column_indices: &[ColumnIndex],
 ) -> Option<(SpatialPredicate, Option<Arc<dyn PhysicalExpr>>)> {
-    if let Some(scalar_fn) = expr.as_any().downcast_ref::<ScalarFunctionExpr>()
+    if let Some(scalar_fn) = expr.downcast_ref::<ScalarFunctionExpr>()
         && let Some(relation_predicate) = match_relation_predicate(scalar_fn, column_indices)
     {
         return Some((SpatialPredicate::Relation(relation_predicate), None));
@@ -119,7 +119,7 @@ fn extract_spatial_predicate(
         return Some((SpatialPredicate::Distance(distance_predicate), None));
     }
 
-    if let Some(binary_expr) = expr.as_any().downcast_ref::<BinaryExpr>() {
+    if let Some(binary_expr) = expr.downcast_ref::<BinaryExpr>() {
         if !matches!(binary_expr.op(), Operator::And) {
             return None;
         }
@@ -260,7 +260,7 @@ fn collect_column_references(
     let mut collected_column_indices = Vec::with_capacity(column_indices.len());
 
     expr.apply(|node| {
-        if let Some(column) = node.as_any().downcast_ref::<Column>() {
+        if let Some(column) = node.downcast_ref::<Column>() {
             let intermediate_index = column.index();
             let column_info = &column_indices[intermediate_index];
             collected_column_indices.push(column_info.clone());
@@ -310,7 +310,7 @@ fn reproject_column_references(
     expr.clone()
         .transform_down(|node| {
             // Check if this is a Column expression
-            if let Some(column) = node.as_any().downcast_ref::<Column>() {
+            if let Some(column) = node.downcast_ref::<Column>() {
                 let old_index = column.index();
                 if let Some(&new_index) = index_map.get(&old_index) {
                     // Create a new Column with the mapped index

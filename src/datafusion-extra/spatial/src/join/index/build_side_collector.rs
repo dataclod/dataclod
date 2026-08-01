@@ -133,7 +133,7 @@ impl BuildSideBatchesCollector {
     /// grown here are not released until the spatial join operator
     /// completes.
     pub async fn collect(
-        &self, mut stream: SendableEvaluatedBatchStream, mut reservation: MemoryReservation,
+        &self, mut stream: SendableEvaluatedBatchStream, reservation: MemoryReservation,
         mut bbox_sampler: BoundingBoxSampler, metrics: CollectBuildSideMetrics,
     ) -> Result<BuildPartition> {
         let mut spill_writer_opt = None;

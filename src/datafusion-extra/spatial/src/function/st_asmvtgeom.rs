@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::sync::Arc;
 
 use datafusion::arrow::array::{Array, AsArray, BinaryViewArray, new_null_array};
@@ -34,10 +33,6 @@ struct AsMVTGeomUdf {
 }
 
 impl ScalarUDFImpl for AsMVTGeomUdf {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "ST_AsMVTGeom"
     }

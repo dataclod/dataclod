@@ -653,9 +653,6 @@ fn generate_multi_udf(signatures: Vec<Expr>, input_fn: ItemFn) -> Result<TokenSt
         }
 
         impl datafusion::logical_expr::ScalarUDFImpl for #struct_ident {
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
-            }
 
             fn name(&self) -> &str {
                 #sql_name
@@ -881,9 +878,6 @@ fn generate_udf(attr: Expr, input_fn: ItemFn) -> Result<TokenStream2> {
         }
 
         impl datafusion::logical_expr::ScalarUDFImpl for #struct_ident {
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
-            }
 
             fn name(&self) -> &str {
                 #display_name

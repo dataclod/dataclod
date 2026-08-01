@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -71,10 +70,6 @@ impl PgNamespaceTable {
 
 #[async_trait]
 impl TableProvider for PgNamespaceTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn table_type(&self) -> TableType {
         TableType::Base
     }

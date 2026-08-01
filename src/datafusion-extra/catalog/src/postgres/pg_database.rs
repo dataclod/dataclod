@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -70,10 +69,6 @@ impl PgDatabaseTable {
 
 #[async_trait]
 impl TableProvider for PgDatabaseTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn table_type(&self) -> TableType {
         TableType::Base
     }

@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::sync::Arc;
 
 use common_utils::PgTypeId;
@@ -25,10 +24,6 @@ struct FormatType {
 }
 
 impl ScalarUDFImpl for FormatType {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "format_type"
     }

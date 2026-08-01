@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -24,10 +23,6 @@ struct ArrayUpper {
 }
 
 impl ScalarUDFImpl for ArrayUpper {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "array_upper"
     }

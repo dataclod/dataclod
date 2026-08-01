@@ -50,10 +50,6 @@ impl ScalarUDFImpl for PgGetPartkeydefUDF {
 
         Ok(ColumnarValue::Array(array))
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 pub fn create_pg_get_partkeydef_udf() -> ScalarUDF {

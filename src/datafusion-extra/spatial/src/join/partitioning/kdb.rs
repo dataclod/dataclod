@@ -179,7 +179,7 @@ impl KDBTree {
         if self.is_leaf() {
             f(self)
         } else if let Some(ref children) = self.children {
-            for child in children.iter() {
+            for child in children {
                 child.visit_intersecting_leaf_nodes(rect, f);
             }
         }
@@ -189,7 +189,7 @@ impl KDBTree {
         if self.is_leaf() {
             f(self)
         } else if let Some(ref children) = self.children {
-            for child in children.iter() {
+            for child in children {
                 child.visit_leaf_nodes(f);
             }
         }

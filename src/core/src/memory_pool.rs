@@ -59,6 +59,10 @@ impl QueryFairSpillPool {
 }
 
 impl MemoryPool for QueryFairSpillPool {
+    fn name(&self) -> &str {
+        "query_fair_spill"
+    }
+
     fn register(&self, consumer: &MemoryConsumer) {
         if consumer.can_spill() {
             self.state.lock().num_spill += 1;
@@ -147,6 +151,18 @@ impl MemoryPool for QueryFairSpillPool {
 
     fn memory_limit(&self) -> MemoryLimit {
         MemoryLimit::Finite(self.pool_size)
+    }
+}
+
+impl std::fmt::Display for QueryFairSpillPool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}(pool_size: {}, unspillable_reserve_ratio: {})",
+            self.name(),
+            self.pool_size,
+            self.unspillable_reserve_ratio
+        )
     }
 }
 
