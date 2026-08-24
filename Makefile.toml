@@ -61,6 +61,46 @@ env = { RUSTFLAGS = "--cfg tokio_unstable" }
 command = "cargo"
 args = ["run", "--bin", "dataclod-core", "--features", "console"]
 
+[tasks.cluster-data]
+script = "mkdir -p ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.data"
+
+[tasks.coordinator]
+dependencies = ["cluster-data"]
+env = { DATACLOD_ROLE = "coordinator", DATACLOD_FLIGHT_PORT = "9100", DATACLOD_ADVERTISED_FLIGHT_URL = "http://127.0.0.1:9100", DATACLOD_WORKER_URLS = "http://127.0.0.1:9100", DATACLOD_DATA_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.data" }
+command = "cargo"
+args = ["run", "--bin", "dataclod-core"]
+
+[tasks.worker]
+dependencies = ["cluster-data"]
+env = { DATACLOD_ROLE = "worker", DATACLOD_FLIGHT_PORT = "9101", DATACLOD_ADVERTISED_FLIGHT_URL = "http://127.0.0.1:9101", DATACLOD_DATA_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.data" }
+command = "cargo"
+args = ["run", "--bin", "dataclod-core"]
+
+[tasks.worker-9101]
+dependencies = ["cluster-data"]
+env = { DATACLOD_ROLE = "worker", DATACLOD_FLIGHT_PORT = "9101", DATACLOD_ADVERTISED_FLIGHT_URL = "http://127.0.0.1:9101", DATACLOD_DATA_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.data" }
+command = "cargo"
+args = ["run", "--bin", "dataclod-core"]
+
+[tasks.worker-9102]
+dependencies = ["cluster-data"]
+env = { DATACLOD_ROLE = "worker", DATACLOD_FLIGHT_PORT = "9102", DATACLOD_ADVERTISED_FLIGHT_URL = "http://127.0.0.1:9102", DATACLOD_DATA_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.data" }
+command = "cargo"
+args = ["run", "--bin", "dataclod-core"]
+
+[tasks.coordinator-cluster]
+dependencies = ["cluster-data"]
+env = { DATACLOD_ROLE = "coordinator", DATACLOD_FLIGHT_PORT = "9100", DATACLOD_ADVERTISED_FLIGHT_URL = "http://127.0.0.1:9100", DATACLOD_WORKER_URLS = "http://127.0.0.1:9100,http://127.0.0.1:9101,http://127.0.0.1:9102", DATACLOD_DATA_DIR = "${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/.data" }
+command = "cargo"
+args = ["run", "--bin", "dataclod-core"]
+
+[tasks.cluster]
+run_task = { name = [
+  "coordinator-cluster",
+  "worker-9101",
+  "worker-9102",
+], parallel = true }
+
 [tasks.fmt]
 command = "cargo"
 args = ["fmt", "--all"]

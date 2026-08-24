@@ -4,12 +4,23 @@ mod current_schemas;
 mod format_type;
 mod version;
 
-use datafusion::execution::context::SessionContext;
+use std::sync::Arc;
 
-pub fn register_udf(ctx: &SessionContext) {
-    ctx.register_udf(array_upper::create_udf());
-    ctx.register_udf(current_schema::create_udf());
-    ctx.register_udf(current_schemas::create_udf());
-    ctx.register_udf(version::create_udf());
-    ctx.register_udf(format_type::create_udf());
+use datafusion::execution::context::SessionContext;
+use datafusion::logical_expr::ScalarUDF;
+
+pub fn sqlbuiltin_udfs() -> Vec<Arc<ScalarUDF>> {
+    vec![
+        Arc::new(array_upper::create_udf()),
+        Arc::new(current_schema::create_udf()),
+        Arc::new(current_schemas::create_udf()),
+        Arc::new(version::create_udf()),
+        Arc::new(format_type::create_udf()),
+    ]
+}
+
+pub fn register_sqlbuiltin_udfs(ctx: &SessionContext) {
+    for udf in sqlbuiltin_udfs() {
+        ctx.register_udf(udf.as_ref().clone());
+    }
 }

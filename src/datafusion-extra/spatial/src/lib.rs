@@ -8,6 +8,10 @@ mod option;
 mod statistics;
 mod utils;
 
-pub use function::register_spatial_udfs;
+pub use function::{register_spatial_udfs, spatial_udfs};
 pub use join::planner::register_planner;
 pub use option::add_dataclod_option_extension;
+
+pub fn init_tggeom_alloc() {
+    tg_geom::init_mimalloc();
+}

@@ -16,6 +16,8 @@ console = ["common-telemetry/console"]
 
 [dependencies]
 common-telemetry.workspace = true
+dataclod.workspace = true
+dataclod-distributed.workspace = true
 mimalloc = "0.1"
 server.workspace = true
 tokio.workspace = true

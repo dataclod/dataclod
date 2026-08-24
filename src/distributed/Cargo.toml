@@ -1,0 +1,33 @@
+[package]
+name = "dataclod-distributed"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+dataclod.workspace = true
+datafusion.workspace = true
+datafusion-distributed.workspace = true
+datafusion-proto = { version = "54", default-features = false, features = [
+  "parquet",
+] }
+datafusion-spatial.workspace = true
+server.workspace = true
+tokio.workspace = true
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { version = "0.14", features = ["transport"] }
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+duckdb.workspace = true
+tempfile = "3"

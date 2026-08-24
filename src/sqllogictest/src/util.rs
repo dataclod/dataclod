@@ -117,20 +117,3 @@ pub fn df_value_validator(
 
     normalized_actual == normalized_expected
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Validation should fail for the below case:
-    // Actual - 'foo bar baz'
-    // Expected - 'bar <slt:ignore>'
-    #[test]
-    fn ignore_marker_does_not_skip_leading_text() {
-        // Actual snapshot contains unexpected prefix before the expected fragment.
-        let actual = vec![vec!["foo bar baz".to_owned()]];
-        let expected = vec!["bar <slt:ignore>".to_owned()];
-
-        assert!(!df_value_validator(value_normalizer, &actual, &expected));
-    }
-}

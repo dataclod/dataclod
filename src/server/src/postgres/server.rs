@@ -16,7 +16,10 @@ pub struct PostgresBackend {
 
 impl PostgresBackend {
     pub fn new() -> Self {
-        let ctx = Arc::new(QueryContext::new());
+        Self::with_context(Arc::new(QueryContext::new()))
+    }
+
+    pub fn with_context(ctx: Arc<QueryContext>) -> Self {
         Self {
             simple_handler: Arc::new(SimplePostgresBackend::new(ctx.clone())),
             extended_handler: Arc::new(ExtendedPostgresBackend::new(ctx)),
